@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuraAttend | Premium Daily Attendance Tracker</title>
+  <meta name="description" content="Track your college attendance in real-time, log daily classes, plan schedules, and see forecasts instantly.">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient Background Gradients -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        </div>
+        <h1>AuraAttend</h1>
+      </div>
+      <div class="header-actions">
+        <span class="current-date-badge" id="headerDate">Loading date...</span>
+      </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="app-nav">
+      <button class="nav-btn active" data-tab="dashboard" id="btnTabDashboard">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-btn" data-tab="subjects" id="btnTabSubjects">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        <span>Subjects</span>
+      </button>
+      <button class="nav-btn" data-tab="logs" id="btnTabLogs">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <span>Logs Tracker</span>
+      </button>
+      <button class="nav-btn" data-tab="timetable" id="btnTabTimetable">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span>Timetable</span>
+      </button>
+      <button class="nav-btn" data-tab="calendar" id="btnTabCalendar">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path></svg>
+        <span>Calendar & Data</span>
+      </button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      
+      <!-- ================= DASHBOARD TAB ================= -->
+      <section class="tab-content active" id="tabDashboard">
+        <div class="dashboard-grid">
+          <!-- Stats Overview Card -->
+          <div class="glass-card overview-card">
+            <div class="overview-header">
+              <h2>Overall Attendance</h2>
+              <span class="status-indicator" id="overallStatus">Calculating...</span>
+            </div>
+            <div class="overview-body">
+              <div class="progress-ring-container">
+                <svg class="progress-ring" width="160" height="160">
+                  <circle class="progress-ring__circle-bg" stroke="rgba(255,255,255,0.05)" stroke-width="12" fill="transparent" r="70" cx="80" cy="80" />
+                  <circle class="progress-ring__circle" id="overallProgressRing" stroke="url(#activeGlowGradient)" stroke-width="12" fill="transparent" r="70" cx="80" cy="80" stroke-linecap="round" />
+                  <defs>
+                    <linearGradient id="activeGlowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="var(--accent-glow)" />
+                      <stop offset="100%" stop-color="var(--accent-secondary)" />
+                    </linearGradient>
+                    <linearGradient id="dangerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="hsl(0, 84%, 60%)" />
+                      <stop offset="100%" stop-color="hsl(20, 90%, 55%)" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div class="progress-ring-text">
+                  <span class="pct-value" id="overallPct">0%</span>
+                  <span class="pct-label" id="overallRatio">0 / 0</span>
+                </div>
+              </div>
+              <div class="stats-insights">
+                <div class="insight-row">
+                  <span class="insight-label">Target Goal</span>
+                  <span class="insight-value highlighted">75%</span>
+                </div>
+                <div class="insight-row flex-column align-items-start">
+                  <span class="insight-label" style="font-size: 0.8rem;">Effective Attendance</span>
+                  <div class="effective-pct-display">
+                    <span class="effective-value" id="overallEffectivePct">0%</span>
+                    <span class="effective-sub" id="overallEffectiveRatio">(0/0 with submitted logs)</span>
+                  </div>
+                </div>
+                <div class="insight-action" id="safetyInsight">
+                  Loading insights based on schedule...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily Tracker / Checklist -->
+          <div class="glass-card checklist-card">
+            <div class="card-header flex-column md-flex-row">
+              <div class="card-title-group">
+                <h2>Today's Checklist</h2>
+                <p class="subtitle" id="checklistDayLabel">Monday Schedule</p>
+              </div>
+              <div class="checklist-header-actions">
+                <button class="btn btn-primary btn-sm" id="btnOpenExtraClassModal" title="Add Extra Class Today">
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <span>+ Extra</span>
+                </button>
+                <div class="date-navigator">
+                  <button class="icon-btn" id="btnPrevDay" title="Previous Day">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                  </button>
+                  <span class="current-selected-date" id="selectedDateText">Today</span>
+                  <button class="icon-btn" id="btnNextDay" title="Next Day">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div class="checklist-container">
+              <div class="checklist-timeline" id="checklistPlaceholder">
+                <!-- Checklist items injected dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions & Streaks -->
+          <div class="glass-card actions-card">
+            <h2>Activity Streak</h2>
+            <div class="streak-display">
+              <div class="streak-number" id="streakCount">0</div>
+              <div class="streak-details">
+                <span class="streak-label">Day Streak</span>
+                <span class="streak-sub" id="streakMessage">Start marking attendance to build your streak!</span>
+              </div>
+            </div>
+            <div class="calendar-strip" id="calendarStrip">
+              <!-- Inline calendar week grid injected here -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SUBJECTS TAB ================= -->
+      <section class="tab-content" id="tabSubjects">
+        <div class="analytics-layout">
+          <div class="analytics-row-header">
+            <h2>Subject-wise Performance</h2>
+            <p class="subtitle">Detailed breakdown showing overall physical and effective rates, along with Lecture and Tutorial stats separately.</p>
+          </div>
+          <div class="subjects-detail-grid" id="subjectsDetailGrid">
+            <!-- Subject detail cards injected dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= LOGS TRACKER TAB ================= -->
+      <section class="tab-content" id="tabLogs">
+        <div class="glass-card logs-tracker-card">
+          <div class="card-header flex-column md-flex-row">
+            <div class="card-title-group">
+              <h2>Society & Event Logs Checklist</h2>
+              <p class="subtitle">These classes are counted as missed until you submit the proof/log to the respective teacher. Check off submitted logs to raise your Effective Attendance.</p>
+            </div>
+            <div class="logs-filter-group">
+              <label for="filterSubject" style="font-size: 0.8rem; font-weight:600; color:var(--text-secondary); margin-right: 0.5rem;">Subject Filter:</label>
+              <select id="filterSubject" class="btn btn-secondary btn-sm" style="background: rgba(255,255,255,0.05); padding: 0.4rem 0.8rem; border-radius: 8px;">
+                <option value="all">All Subjects</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="logs-table-wrapper">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th width="80" style="text-align: center;">Submitted</th>
+                  <th>Date & Time</th>
+                  <th>Subject</th>
+                  <th>Class Type</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="logsTableBody">
+                <!-- Log entries injected dynamically -->
+              </tbody>
+            </table>
+            <div id="noLogsPlaceholder" class="no-classes-view" style="display: none;">
+              <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span class="no-classes-title">No Society Logs Recorded</span>
+              <p class="subtitle">Classes marked as "Logged Missed" on the dashboard will appear here as a checklist for submission.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TIMETABLE TAB ================= -->
+      <section class="tab-content" id="tabTimetable">
+        <div class="timetable-layout">
+          <!-- Left side: Subject Management -->
+          <div class="glass-card subjects-sidebar">
+            <div class="card-header">
+              <h2>My Subjects</h2>
+              <button class="btn btn-primary btn-sm" id="btnAddSubject">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Add</span>
+              </button>
+            </div>
+            <p class="subtitle">Set up subjects & target percentages.</p>
+            <div class="subjects-list" id="subjectsContainer">
+              <!-- Subjects populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Right side: Timetable Grid -->
+          <div class="glass-card timetable-grid-card">
+            <div class="card-header flex-column md-flex-row">
+              <div class="card-title-group">
+                <h2>Weekly Timetable</h2>
+                <p class="subtitle">College hours: 9:00 AM - 5:30 PM (Lunch Break: 1:00 PM - 1:30 PM)</p>
+              </div>
+              <div class="timetable-actions">
+                <button class="btn btn-secondary btn-sm" id="btnResetTimetable">Reset Timetable</button>
+              </div>
+            </div>
+
+            <!-- Custom Interactive Timetable Grid -->
+            <div class="timetable-scroller">
+              <table class="timetable-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Monday</th>
+                    <th>Tuesday</th>
+                    <th>Wednesday</th>
+                    <th>Thursday</th>
+                    <th>Friday</th>
+                    <th>Saturday</th>
+                  </tr>
+                </thead>
+                <tbody id="timetableBody">
+                  <!-- Time blocks injected from 9:00 AM to 5:00 PM -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CALENDAR & DATA TAB ================= -->
+      <section class="tab-content" id="tabCalendar">
+        <div class="analytics-layout">
+          <!-- Monthly Log Calendar -->
+          <div class="history-grid-container">
+            <div class="glass-card monthly-calendar-card">
+              <div class="card-header">
+                <h2>Monthly Logs View</h2>
+                <div class="month-selector">
+                  <button class="icon-btn" id="btnPrevMonth">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                  </button>
+                  <span class="current-month-text" id="currentMonthYearText">July 2026</span>
+                  <button class="icon-btn" id="btnNextMonth">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="monthly-calendar-grid">
+                <div class="calendar-weekday">Sun</div>
+                <div class="calendar-weekday">Mon</div>
+                <div class="calendar-weekday">Tue</div>
+                <div class="calendar-weekday">Wed</div>
+                <div class="calendar-weekday">Thu</div>
+                <div class="calendar-weekday">Fri</div>
+                <div class="calendar-weekday">Sat</div>
+                <!-- Days grid populated dynamically -->
+                <div class="calendar-days-container" id="calendarDaysGrid"></div>
+              </div>
+              <div class="calendar-legend">
+                <span class="legend-item"><span class="legend-dot status-all-attended"></span> All Attended</span>
+                <span class="legend-item"><span class="legend-dot status-mixed"></span> Mixed</span>
+                <span class="legend-item"><span class="legend-dot status-all-missed"></span> All Missed / Logged</span>
+                <span class="legend-item"><span class="legend-dot status-all-cancelled"></span> All Cancelled</span>
+                <span class="legend-item"><span class="legend-dot status-no-classes"></span> No Classes</span>
+              </div>
+            </div>
+
+            <!-- Historical Log Editor & Data Options -->
+            <div class="glass-card data-management-card">
+              <h2>Data Management</h2>
+              <p class="subtitle text-margin">AuraAttend works locally inside your browser. Export backups so you never lose your records.</p>
+              
+              <div class="data-actions-vertical">
+                <button class="btn btn-outline w-full" id="btnExportData">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  <span>Export Backup (JSON)</span>
+                </button>
+                
+                <button class="btn btn-outline w-full file-upload-wrapper" id="btnImportData">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  <span>Import Backup (JSON)</span>
+                  <input type="file" id="importFileInput" accept=".json" style="display: none;">
+                </button>
+                
+                <button class="btn btn-danger w-full" id="btnClearAllData">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                  <span>Reset All Data</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- Add Extra Class Modal -->
+  <div class="modal-overlay" id="extraClassModal">
+    <div class="glass-card modal-container">
+      <div class="modal-header">
+        <h3>Add Extra Class Today</h3>
+        <button class="icon-btn modal-close" id="btnCloseExtraClassModal">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="extraClassForm">
+        <div class="form-group">
+          <label for="extraClassSubject">Subject</label>
+          <select id="extraClassSubject" required>
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="extraClassType">Class Type</label>
+          <select id="extraClassType" required>
+            <option value="Lecture">Lecture</option>
+            <option value="Tutorial">Tutorial</option>
+            <option value="Practical">Practical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="extraClassTime">Time Slot</label>
+          <select id="extraClassTime" required>
+            <option value="09:00 AM - 10:00 AM">09:00 AM - 10:00 AM</option>
+            <option value="10:00 AM - 11:00 AM">10:00 AM - 11:00 AM</option>
+            <option value="11:00 AM - 12:00 PM">11:00 AM - 12:00 PM</option>
+            <option value="12:00 PM - 01:00 PM">12:00 PM - 01:00 PM</option>
+            <option value="01:30 PM - 02:30 PM">01:30 PM - 02:30 PM</option>
+            <option value="02:30 PM - 03:30 PM">02:30 PM - 03:30 PM</option>
+            <option value="03:30 PM - 04:30 PM">03:30 PM - 04:30 PM</option>
+            <option value="04:30 PM - 05:30 PM">04:30 PM - 05:30 PM</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btnCancelExtraClassModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Class</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add/Edit Subject Modal -->
+  <div class="modal-overlay" id="subjectModal">
+    <div class="glass-card modal-container">
+      <div class="modal-header">
+        <h3 id="subjectModalTitle">Add Subject</h3>
+        <button class="icon-btn modal-close" id="btnCloseSubjectModal">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="subjectForm">
+        <input type="hidden" id="modalSubjectId">
+        <div class="form-group">
+          <label for="subjectName">Subject Name</label>
+          <input type="text" id="subjectName" required placeholder="e.g. Computer Networks">
+        </div>
+        <div class="form-group">
+          <label for="subjectCode">Subject Code (Optional)</label>
+          <input type="text" id="subjectCode" placeholder="e.g. CS-302">
+        </div>
+        <div class="form-group">
+          <label for="subjectTarget">Target Attendance (%)</label>
+          <input type="number" id="subjectTarget" required min="50" max="100" value="75">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btnCancelSubjectModal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveSubject">Save Subject</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add/Edit Timetable Slot Modal -->
+  <div class="modal-overlay" id="slotModal">
+    <div class="glass-card modal-container">
+      <div class="modal-header">
+        <h3 id="slotModalTitle">Configure Timetable Slot</h3>
+        <button class="icon-btn modal-close" id="btnCloseSlotModal">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <form id="slotForm">
+        <input type="hidden" id="slotDay">
+        <input type="hidden" id="slotHourIndex">
+        
+        <div class="form-group">
+          <label for="slotSubject">Subject</label>
+          <select id="slotSubject" required>
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="slotType">Class Type</label>
+          <select id="slotType" required>
+            <option value="Lecture">Lecture</option>
+            <option value="Tutorial">Tutorial</option>
+            <option value="Practical">Practical</option>
+          </select>
+        </div>
+
+        <div class="time-slot-info" id="slotTimeLabel">
+          Selected Slot: Monday, 9:00 AM - 10:00 AM
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-danger mr-auto" id="btnDeleteSlot" style="display: none;">Delete Slot</button>
+          <button type="button" class="btn btn-secondary" id="btnCancelSlotModal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Slot</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Day View Modal (Retroactive) -->
+  <div class="modal-overlay" id="dayLogsModal">
+    <div class="glass-card modal-container modal-wide">
+      <div class="modal-header">
+        <h3 id="dayLogsTitle">Attendance Log for [Date]</h3>
+        <button class="icon-btn modal-close" id="btnCloseDayLogsModal">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle text-margin">Retroactively change attendance status. Changes update statistics immediately.</p>
+        <div class="day-logs-list" id="dayLogsListContainer">
+          <!-- Logs listing with radio inputs -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="btnSaveDayLogs">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- JS Logic Core -->
+  <script src="app.js"></script>
+</body>
+</html>
