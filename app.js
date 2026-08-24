@@ -906,45 +906,82 @@ function renderSubjectsAnalytics() {
   if (!grid) return;
   grid.innerHTML = "";
 
-  state.subjects.forEach(subj => {
-    const stats = calculateSubjectStats(subj.id, filterMonth);
-    const good  = stats.actualPct >= subj.target;
+  const availableMonths = getAvailableMonths();
 
-    let advice = "";
-    if (stats.conducted === 0) {
-      advice = "No classes recorded for this selection.";
-    } else if (good) {
-      const canMiss = Math.floor((100 * stats.attended - subj.target * stats.conducted) / subj.target);
-      advice = canMiss > 0
+  state.subjects.forEach(subj => {
+    // Overall cumulative stats
+    const overallStats = calculateSubjectStats(subj.id, "all");
+    const isGood = overallStats.actualPct >= subj.target;
+
+    let overallAdvice = "";
+    if (overallStats.conducted === 0) {
+      overallAdvice = "No classes recorded yet.";
+    } else if (isGood) {
+      const canMiss = Math.floor((100 * overallStats.attended - subj.target * overallStats.conducted) / subj.target);
+      overallAdvice = canMiss > 0
         ? `Safe — can skip <strong>${canMiss}</strong> more class${canMiss!==1?"es":""}.`
         : `On the limit — don't miss any!`;
     } else {
-      const need = Math.ceil((subj.target * stats.conducted - 100 * stats.attended) / (100 - subj.target));
-      advice = stats.effectivePct >= subj.target
+      const need = Math.ceil((subj.target * overallStats.conducted - 100 * overallStats.attended) / (100 - subj.target));
+      overallAdvice = overallStats.effectivePct >= subj.target
         ? `Below target, but logs cover it. Attend <strong>${need}</strong> more.`
         : `Attend next <strong>${need}</strong> class${need!==1?"es":""} to reach ${subj.target}%.`;
     }
 
-    // Only show types that appear in this subject's timetable
-    const typeRows = ["Lecture","Tutorial","Practical"].filter(t =>
-      stats.byType[t].conducted > 0 ||
-      Object.values(state.timetable).some(day => day.some(sl => sl.subjectId === subj.id && sl.type === t))
-    );
+    // Build Structured Month-by-Month Blocks under this subject head
+    let monthlyBlocksHTML = "";
 
-    const typeHTML = typeRows.map(t => {
-      const d   = stats.byType[t];
-      const pct = d.conducted > 0 ? Math.round(d.actualPct) : null;
-      const col = pct === null ? "var(--text-muted)" : pct >= subj.target ? "var(--color-attended)" : "var(--color-missed)";
-      return `
-        <div class="type-row">
-          <span class="badge-type ${t.toLowerCase()} type-label">${t}</span>
-          <div class="type-bar-wrap">
-            <div class="type-bar" style="width:${pct||0}%; background:${col}"></div>
+    availableMonths.forEach(m => {
+      const monthStats = calculateSubjectStats(subj.id, m);
+      if (monthStats.conducted === 0) return; // Only show months with classes for this subject
+
+      const dateObj = new Date(m + "-01T12:00:00");
+      const monthName = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+      const lec = monthStats.byType.Lecture;
+      const tut = monthStats.byType.Tutorial;
+      const prac = monthStats.byType.Practical;
+
+      let typePills = "";
+      if (lec.conducted > 0) {
+        typePills += `
+          <div class="type-stat-pill">
+            <span class="type-name badge-type lecture">Lecture</span>
+            <span class="type-ratio">${lec.attended}/${lec.conducted} <small style="opacity:0.75;">(${Math.round(lec.actualPct)}%)</small></span>
+          </div>`;
+      }
+      if (tut.conducted > 0) {
+        typePills += `
+          <div class="type-stat-pill">
+            <span class="type-name badge-type tutorial">Tutorial</span>
+            <span class="type-ratio">${tut.attended}/${tut.conducted} <small style="opacity:0.75;">(${Math.round(tut.actualPct)}%)</small></span>
+          </div>`;
+      }
+      if (prac.conducted > 0) {
+        typePills += `
+          <div class="type-stat-pill">
+            <span class="type-name badge-type practical">Practical</span>
+            <span class="type-ratio">${prac.attended}/${prac.conducted} <small style="opacity:0.75;">(${Math.round(prac.actualPct)}%)</small></span>
+          </div>`;
+      }
+
+      monthlyBlocksHTML += `
+        <div class="month-breakdown-card">
+          <div class="month-card-header">
+            <span class="month-card-name">🗓️ ${monthName}</span>
+            <span class="month-card-stats" style="color:${monthStats.actualPct>=subj.target?'var(--color-attended)':'var(--color-missed)'}">
+              ${monthStats.attended}/${monthStats.conducted} (${Math.round(monthStats.actualPct)}%)
+            </span>
           </div>
-          <span class="type-pct" style="color:${col}">${pct !== null ? pct+"%" : "—"}</span>
-          <span class="type-fraction">${d.attended}/${d.conducted}</span>
+          <div class="month-type-grid">
+            ${typePills}
+          </div>
         </div>`;
-    }).join("");
+    });
+
+    if (!monthlyBlocksHTML) {
+      monthlyBlocksHTML = `<div style="font-size:0.775rem;color:var(--text-muted);padding:0.5rem 0;">No monthly records logged yet.</div>`;
+    }
 
     const card = document.createElement("div");
     card.className = "subj-analytics-card";
@@ -955,27 +992,31 @@ function renderSubjectsAnalytics() {
           ${subj.code ? `<span class="subj-card-code">${subj.code}</span>` : ""}
         </div>
         <div class="pct-group">
-          <span class="subj-pct-main" style="color:${good?"var(--color-attended)":"var(--color-missed)"}">${Math.round(stats.actualPct)}%</span>
-          <span class="subj-pct-eff">Eff: ${Math.round(stats.effectivePct)}%</span>
+          <span class="subj-pct-main" style="color:${isGood?"var(--color-attended)":"var(--color-missed)"}">${Math.round(overallStats.actualPct)}%</span>
+          <span class="subj-pct-eff">Effective: ${Math.round(overallStats.effectivePct)}%</span>
         </div>
       </div>
+
       <div class="subj-progress-container">
-        <div class="subj-progress-bar actual" style="width:${stats.actualPct}%; background:${good?"var(--color-attended)":"var(--color-missed)"}"></div>
-        <div class="subj-progress-bar effective" style="width:${stats.effectivePct}%"></div>
+        <div class="subj-progress-bar actual" style="width:${overallStats.actualPct}%; background:${isGood?"var(--color-attended)":"var(--color-missed)"}"></div>
+        <div class="subj-progress-bar effective" style="width:${overallStats.effectivePct}%"></div>
       </div>
+
       <div class="subj-meta-row">
-        <span>Attended: ${stats.attended}/${stats.conducted}</span>
+        <span>Overall Attended: ${overallStats.attended}/${overallStats.conducted}</span>
         <span>Target: ${subj.target}%</span>
       </div>
-      <div class="type-breakdown">
-        ${typeHTML}
+
+      <div class="monthly-subject-section">
+        <span class="monthly-section-title">📅 Month-by-Month Breakdown:</span>
+        ${monthlyBlocksHTML}
       </div>
-      <div class="subj-advice">${advice}</div>`;
+
+      <div class="subj-advice">${overallAdvice}</div>`;
     grid.appendChild(card);
   });
 }
 
-// ================= LOGS TRACKER =================
 function populateLogFilterDropdown() {
   const select = document.getElementById("filterSubject");
   select.innerHTML = `<option value="all">All Subjects</option>`;

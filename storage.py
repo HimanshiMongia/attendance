@@ -40,7 +40,7 @@ def _weekday_name(date_str: str) -> str:
 
 
 def _export_spreadsheets(state: dict) -> None:
-    """Generate Excel (.xlsx) and CSV files for monthly subject attendance and logs."""
+    """Generate Excel (.xlsx) and CSV files for date-wise class records and month-wise subject breakdowns."""
     subjects = state.get("subjects", [])
     attendance_logs = state.get("attendanceLogs", {})
 
@@ -49,10 +49,45 @@ def _export_spreadsheets(state: dict) -> None:
     # Collect all unique months (YYYY-MM)
     months = sorted(list({d[:7] for d in attendance_logs.keys()}), reverse=True)
     if not months:
-        # Fallback to current month if no logs yet
         months = [datetime.now().strftime("%Y-%m")]
 
-    # 1. Prepare Monthly Subject Summary Data
+    # 1. Prepare Date-wise Detailed Class Logs
+    date_log_rows = []
+    for dstr in sorted(attendance_logs.keys(), reverse=True):
+        month_label = datetime.strptime(dstr[:7], "%Y-%m").strftime("%B %Y")
+        wday = _weekday_name(dstr)
+        day_logs = attendance_logs[dstr]
+        for key, log in sorted(day_logs.items()):
+            sid = log.get("subjectId")
+            s_obj = subj_map.get(sid, {})
+            date_log_rows.append({
+                "Date": dstr,
+                "Month": month_label,
+                "Weekday": wday,
+                "Time_Slot": log.get("timeSlot", ""),
+                "Subject_Code": s_obj.get("code", ""),
+                "Subject_Name": log.get("subjectName", s_obj.get("name", "")),
+                "Class_Type": log.get("type", "Lecture"),
+                "Status": log.get("status", "Unmarked"),
+                "Log_Submitted": "Yes" if log.get("submitted") else ("No" if log.get("status") == "LoggedMissed" else "-"),
+                "Extra_Class": "Yes" if log.get("isExtra") else "No"
+            })
+
+    # Write Date-wise All Logs CSV
+    with ALL_LOGS_CSV_FILE.open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([
+            "Date", "Month", "Weekday", "Time Slot", "Subject Code",
+            "Subject Name", "Class Type", "Attendance Status", "Log Submitted", "Extra Class"
+        ])
+        for r in date_log_rows:
+            writer.writerow([
+                r["Date"], r["Month"], r["Weekday"], r["Time_Slot"],
+                r["Subject_Code"], r["Subject_Name"], r["Class_Type"],
+                r["Status"], r["Log_Submitted"], r["Extra_Class"]
+            ])
+
+    # 2. Prepare Monthly Subject Breakdown Data (with Lecture, Tutorial, Practical counts)
     monthly_rows = []
     for month in months:
         month_label = datetime.strptime(month, "%Y-%m").strftime("%B %Y")
@@ -62,45 +97,68 @@ def _export_spreadsheets(state: dict) -> None:
             scode = s.get("code", "")
             target = s.get("target", 67)
 
-            attended = 0
-            missed = 0
-            logged_missed = 0
-            submitted = 0
-            cancelled = 0
+            by_type = {
+                "Lecture":   {"attended": 0, "missed": 0, "logged": 0, "submitted": 0, "conducted": 0},
+                "Tutorial":  {"attended": 0, "missed": 0, "logged": 0, "submitted": 0, "conducted": 0},
+                "Practical": {"attended": 0, "missed": 0, "logged": 0, "submitted": 0, "conducted": 0}
+            }
+
+            tot_attended = 0
+            tot_missed = 0
+            tot_logged = 0
+            tot_submitted = 0
+            tot_cancelled = 0
 
             for dstr, day_logs in attendance_logs.items():
                 if dstr.startswith(month):
                     for log in day_logs.values():
                         if log.get("subjectId") == sid:
                             st = log.get("status")
-                            if st == "Attended":
-                                attended += 1
-                            elif st == "Missed":
-                                missed += 1
-                            elif st == "LoggedMissed":
-                                logged_missed += 1
-                                if log.get("submitted"):
-                                    submitted += 1
-                            elif st == "Cancelled":
-                                cancelled += 1
+                            ctype = log.get("type", "Lecture")
+                            if ctype not in by_type:
+                                ctype = "Lecture"
 
-            conducted = attended + missed + logged_missed
-            phys_pct = round((attended / conducted * 100), 1) if conducted > 0 else 100.0
-            eff_pct = round(((attended + submitted) / conducted * 100), 1) if conducted > 0 else 100.0
+                            if st == "Attended":
+                                tot_attended += 1
+                                by_type[ctype]["attended"] += 1
+                                by_type[ctype]["conducted"] += 1
+                            elif st == "Missed":
+                                tot_missed += 1
+                                by_type[ctype]["missed"] += 1
+                                by_type[ctype]["conducted"] += 1
+                            elif st == "LoggedMissed":
+                                tot_logged += 1
+                                by_type[ctype]["logged"] += 1
+                                by_type[ctype]["conducted"] += 1
+                                if log.get("submitted"):
+                                    tot_submitted += 1
+                                    by_type[ctype]["submitted"] += 1
+                            elif st == "Cancelled":
+                                tot_cancelled += 1
+
+            tot_conducted = tot_attended + tot_missed + tot_logged
+            phys_pct = round((tot_attended / tot_conducted * 100), 1) if tot_conducted > 0 else 100.0
+            eff_pct = round(((tot_attended + tot_submitted) / tot_conducted * 100), 1) if tot_conducted > 0 else 100.0
             status_text = "On Track" if phys_pct >= target else ("Log Covered" if eff_pct >= target else "Critical")
+
+            lec_str = f"{by_type['Lecture']['attended']}/{by_type['Lecture']['conducted']}" if by_type['Lecture']['conducted'] > 0 else "-"
+            tut_str = f"{by_type['Tutorial']['attended']}/{by_type['Tutorial']['conducted']}" if by_type['Tutorial']['conducted'] > 0 else "-"
+            prac_str = f"{by_type['Practical']['attended']}/{by_type['Practical']['conducted']}" if by_type['Practical']['conducted'] > 0 else "-"
 
             monthly_rows.append({
                 "Month": month_label,
-                "Month_Key": month,
                 "Subject_Code": scode,
                 "Subject_Name": sname,
                 "Target_%": target,
-                "Conducted": conducted,
-                "Attended": attended,
-                "Missed": missed,
-                "Event_Logs": logged_missed,
-                "Logs_Submitted": submitted,
-                "Cancelled": cancelled,
+                "Lecture_Attended_Conducted": lec_str,
+                "Tutorial_Attended_Conducted": tut_str,
+                "Practical_Attended_Conducted": prac_str,
+                "Total_Conducted": tot_conducted,
+                "Total_Attended": tot_attended,
+                "Missed": tot_missed,
+                "Event_Logs": tot_logged,
+                "Logs_Submitted": tot_submitted,
+                "Cancelled": tot_cancelled,
                 "Physical_Attendance_%": phys_pct,
                 "Effective_Attendance_%": eff_pct,
                 "Status": status_text
@@ -110,49 +168,19 @@ def _export_spreadsheets(state: dict) -> None:
     with MONTHLY_CSV_FILE.open("w", encoding="utf-8-sig", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow([
-            "Month", "Subject Code", "Subject Name", "Target %", "Conducted",
-            "Attended", "Missed", "Event Logs", "Logs Submitted", "Cancelled",
+            "Month", "Subject Code", "Subject Name", "Target %",
+            "Lecture (Attended/Conducted)", "Tutorial (Attended/Conducted)", "Practical (Attended/Conducted)",
+            "Total Conducted", "Total Attended", "Missed", "Event Logs", "Logs Submitted", "Cancelled",
             "Physical Attendance %", "Effective Attendance %", "Status"
         ])
         for r in monthly_rows:
             writer.writerow([
                 r["Month"], r["Subject_Code"], r["Subject_Name"], r["Target_%"],
-                r["Conducted"], r["Attended"], r["Missed"], r["Event_Logs"],
+                r["Lecture_Attended_Conducted"], r["Tutorial_Attended_Conducted"], r["Practical_Attended_Conducted"],
+                r["Total_Conducted"], r["Total_Attended"], r["Missed"], r["Event_Logs"],
                 r["Logs_Submitted"], r["Cancelled"], r["Physical_Attendance_%"],
                 r["Effective_Attendance_%"], r["Status"]
             ])
-
-    # 2. Prepare All Logs Detailed CSV Data
-    all_log_rows = []
-    for dstr in sorted(attendance_logs.keys(), reverse=True):
-        month_label = datetime.strptime(dstr[:7], "%Y-%m").strftime("%B %Y")
-        wday = _weekday_name(dstr)
-        day_logs = attendance_logs[dstr]
-        for key, log in sorted(day_logs.items()):
-            sid = log.get("subjectId")
-            s_obj = subj_map.get(sid, {})
-            all_log_rows.append([
-                dstr,
-                month_label,
-                wday,
-                log.get("timeSlot", ""),
-                s_obj.get("code", ""),
-                log.get("subjectName", s_obj.get("name", "")),
-                log.get("type", "Lecture"),
-                log.get("status", "Unmarked"),
-                "Yes" if log.get("submitted") else ("No" if log.get("status") == "LoggedMissed" else "-"),
-                "Yes" if log.get("isExtra") else "No"
-            ])
-
-    # Write Detailed All Logs CSV
-    with ALL_LOGS_CSV_FILE.open("w", encoding="utf-8-sig", newline="") as fh:
-        writer = csv.writer(fh)
-        writer.writerow([
-            "Date", "Month", "Weekday", "Time Slot", "Subject Code",
-            "Subject Name", "Class Type", "Attendance Status", "Log Submitted", "Extra Class"
-        ])
-        for row in all_log_rows:
-            writer.writerow(row)
 
     # 3. Write Excel (.xlsx) if openpyxl is installed
     try:
@@ -160,17 +188,6 @@ def _export_spreadsheets(state: dict) -> None:
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
         wb = openpyxl.Workbook()
-
-        # Sheet 1: Monthly Summary
-        ws1 = wb.active
-        ws1.title = "Monthly Attendance Summary"
-        ws1.views.sheetView[0].showGridLines = True
-
-        headers1 = [
-            "Month", "Subject Code", "Subject Name", "Target %", "Conducted",
-            "Attended", "Missed", "Event Logs", "Submitted Logs", "Cancelled",
-            "Physical %", "Effective %", "Status"
-        ]
 
         header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
         header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
@@ -181,6 +198,16 @@ def _export_spreadsheets(state: dict) -> None:
             bottom=Side(style='thin', color='CBD5E1')
         )
 
+        # Sheet 1: Date-wise Class Logs (Primary Sheet)
+        ws1 = wb.active
+        ws1.title = "Date-wise Class Records"
+        ws1.views.sheetView[0].showGridLines = True
+
+        headers1 = [
+            "Date", "Month", "Weekday", "Time Slot", "Subject Code",
+            "Subject Name", "Class Type", "Attendance Status", "Log Submitted", "Extra Class"
+        ]
+
         ws1.append(headers1)
         for col_idx in range(1, len(headers1) + 1):
             cell = ws1.cell(row=1, column=col_idx)
@@ -188,12 +215,11 @@ def _export_spreadsheets(state: dict) -> None:
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        for r in monthly_rows:
+        for r in date_log_rows:
             ws1.append([
-                r["Month"], r["Subject_Code"], r["Subject_Name"], r["Target_%"],
-                r["Conducted"], r["Attended"], r["Missed"], r["Event_Logs"],
-                r["Logs_Submitted"], r["Cancelled"], r["Physical_Attendance_%"],
-                r["Effective_Attendance_%"], r["Status"]
+                r["Date"], r["Month"], r["Weekday"], r["Time_Slot"],
+                r["Subject_Code"], r["Subject_Name"], r["Class_Type"],
+                r["Status"], r["Log_Submitted"], r["Extra_Class"]
             ])
 
         for row in ws1.iter_rows(min_row=2, max_row=ws1.max_row, min_col=1, max_col=len(headers1)):
@@ -201,18 +227,20 @@ def _export_spreadsheets(state: dict) -> None:
                 cell.border = thin_border
                 cell.alignment = Alignment(vertical="center")
 
-        # Auto-fit columns
         for col in ws1.columns:
             max_len = max(len(str(cell.value or '')) for cell in col)
             col_letter = openpyxl.utils.get_column_letter(col[0].column)
             ws1.column_dimensions[col_letter].width = max(max_len + 3, 12)
 
-        # Sheet 2: All Logs
-        ws2 = wb.create_sheet(title="All Class Logs")
+        # Sheet 2: Subject Month-wise Breakdown
+        ws2 = wb.create_sheet(title="Subject Month Breakdown")
         ws2.views.sheetView[0].showGridLines = True
+
         headers2 = [
-            "Date", "Month", "Weekday", "Time Slot", "Subject Code",
-            "Subject Name", "Class Type", "Attendance Status", "Log Submitted", "Extra Class"
+            "Month", "Subject Code", "Subject Name", "Target %",
+            "Lecture (Att/Cond)", "Tutorial (Att/Cond)", "Practical (Att/Cond)",
+            "Total Conducted", "Total Attended", "Missed", "Event Logs", "Submitted Logs", "Cancelled",
+            "Physical %", "Effective %", "Status"
         ]
         ws2.append(headers2)
         for col_idx in range(1, len(headers2) + 1):
@@ -221,8 +249,14 @@ def _export_spreadsheets(state: dict) -> None:
             cell.fill = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        for r in all_log_rows:
-            ws2.append(r)
+        for r in monthly_rows:
+            ws2.append([
+                r["Month"], r["Subject_Code"], r["Subject_Name"], r["Target_%"],
+                r["Lecture_Attended_Conducted"], r["Tutorial_Attended_Conducted"], r["Practical_Attended_Conducted"],
+                r["Total_Conducted"], r["Total_Attended"], r["Missed"], r["Event_Logs"],
+                r["Logs_Submitted"], r["Cancelled"], r["Physical_Attendance_%"],
+                r["Effective_Attendance_%"], r["Status"]
+            ])
 
         for row in ws2.iter_rows(min_row=2, max_row=ws2.max_row, min_col=1, max_col=len(headers2)):
             for cell in row:
@@ -236,7 +270,8 @@ def _export_spreadsheets(state: dict) -> None:
         wb.save(EXCEL_FILE)
 
     except ImportError:
-        # openpyxl not installed, CSV files are generated natively
+        pass
+# openpyxl not installed, CSV files are generated natively
         pass
 
 
