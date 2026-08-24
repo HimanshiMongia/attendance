@@ -117,7 +117,9 @@ function applyStateMigrations() {
   Object.keys(state.attendanceLogs || {}).forEach(date => {
     Object.keys(state.attendanceLogs[date]).forEach(key => {
       const log = state.attendanceLogs[date][key];
-      if (log.status === "LoggedMissed" && log.submitted === undefined) log.submitted = false;
+      if (log.status === "LoggedMissed" && (log.submitted === undefined || log.submitted === false)) {
+        log.submitted = true;
+      }
     });
   });
 }
@@ -341,7 +343,7 @@ function logAttendance(dateStr, key, slot, status) {
       subjectId: slot.subjectId, subjectName: slot.subjectName,
       type: slot.type, status, timeSlot: slot.timeSlot,
       isExtra: slot.isExtra || false,
-      submitted: status === "LoggedMissed" ? false : undefined
+      submitted: status === "LoggedMissed" ? true : undefined
     };
     const labels = { Attended:["Attended","success"], Missed:["Missed","error"], LoggedMissed:["Event Log","logged"], Cancelled:["Cancelled","info"] };
     showToast(`${slot.subjectName}: ${labels[status][0]}`, labels[status][1]);
@@ -364,7 +366,7 @@ function logGroupAttendance(dateStr, keys, slotsConfig, status) {
         subjectId: cfg.subjectId, subjectName: cfg.subjectName,
         type: cfg.type, status, timeSlot: cfg.timeSlot,
         isExtra: false,
-        submitted: status === "LoggedMissed" ? false : undefined
+        submitted: status === "LoggedMissed" ? true : undefined
       };
     }
   });
@@ -381,7 +383,36 @@ function logGroupAttendance(dateStr, keys, slotsConfig, status) {
 
 // ================= CALCULATIONS =================
 
-function calculateSubjectStats(subjectId) {
+function getAvailableMonths() {
+  const months = new Set();
+  const logs = state.attendanceLogs || {};
+  Object.keys(logs).forEach(dstr => {
+    if (dstr.length >= 7) months.add(dstr.slice(0, 7));
+  });
+  const currentMonth = getLocalDateString(new Date()).slice(0, 7);
+  months.add(currentMonth);
+  return Array.from(months).sort().reverse();
+}
+
+function populateSubjectsMonthDropdown() {
+  const select = document.getElementById("subjectsMonthSelect");
+  if (!select) return;
+  const currentVal = selectedSubjectsMonth || "all";
+  select.innerHTML = `<option value="all">Overall (Cumulative)</option>`;
+  
+  const months = getAvailableMonths();
+  months.forEach(m => {
+    const d = new Date(m + "-01T12:00:00");
+    const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = label;
+    select.appendChild(opt);
+  });
+  select.value = currentVal;
+}
+
+function calculateSubjectStats(subjectId, monthFilter = "all") {
   let attended = 0, missed = 0, loggedMissed = 0, submitted = 0, cancelled = 0;
   const byType = {
     Lecture:   { attended:0, missed:0, loggedMissed:0, submitted:0, conducted:0 },
@@ -389,7 +420,9 @@ function calculateSubjectStats(subjectId) {
     Practical: { attended:0, missed:0, loggedMissed:0, submitted:0, conducted:0 }
   };
 
-  Object.values(state.attendanceLogs).forEach(dayLogs => {
+  Object.keys(state.attendanceLogs || {}).forEach(dateStr => {
+    if (monthFilter !== "all" && !dateStr.startsWith(monthFilter)) return;
+    const dayLogs = state.attendanceLogs[dateStr] || {};
     Object.values(dayLogs).forEach(log => {
       if (log.subjectId !== subjectId) return;
       const t = byType[log.type] || byType.Lecture;
@@ -397,7 +430,7 @@ function calculateSubjectStats(subjectId) {
       else if (log.status === "Missed")       { missed++;      t.missed++;   }
       else if (log.status === "LoggedMissed") {
         loggedMissed++; t.loggedMissed++;
-        if (log.submitted) { submitted++; t.submitted++; }
+        submitted++; t.submitted++;
       }
       else if (log.status === "Cancelled")    { cancelled++; }
     });
@@ -405,30 +438,30 @@ function calculateSubjectStats(subjectId) {
 
   const conducted = attended + missed + loggedMissed;
   const actualPct    = conducted > 0 ? (attended / conducted) * 100 : 100;
-  const effectivePct = conducted > 0 ? ((attended + submitted) / conducted) * 100 : 100;
+  const effectivePct = conducted > 0 ? ((attended + loggedMissed) / conducted) * 100 : 100;
 
   ["Lecture","Tutorial","Practical"].forEach(t => {
     const d = byType[t];
     d.conducted = d.attended + d.missed + d.loggedMissed;
     d.actualPct    = d.conducted > 0 ? (d.attended / d.conducted) * 100 : 100;
-    d.effectivePct = d.conducted > 0 ? ((d.attended + d.submitted) / d.conducted) * 100 : 100;
+    d.effectivePct = d.conducted > 0 ? ((d.attended + d.loggedMissed) / d.conducted) * 100 : 100;
   });
 
   return { attended, missed, loggedMissed, submitted, conducted, actualPct, effectivePct, cancelled, byType };
 }
 
 function updateCalculations() {
-  let totalAttended = 0, totalConducted = 0, totalSubmitted = 0, hasLogs = false;
+  let totalAttended = 0, totalConducted = 0, totalLoggedMissed = 0, hasLogs = false;
   state.subjects.forEach(subj => {
     const s = calculateSubjectStats(subj.id);
-    totalAttended  += s.attended;
-    totalConducted += s.conducted;
-    totalSubmitted += s.submitted;
+    totalAttended     += s.attended;
+    totalConducted    += s.conducted;
+    totalLoggedMissed += s.loggedMissed;
     if (s.conducted > 0) hasLogs = true;
   });
 
   const actualPct    = totalConducted > 0 ? (totalAttended / totalConducted) * 100 : 100;
-  const effectivePct = totalConducted > 0 ? ((totalAttended + totalSubmitted) / totalConducted) * 100 : 100;
+  const effectivePct = totalConducted > 0 ? ((totalAttended + totalLoggedMissed) / totalConducted) * 100 : 100;
 
   const ring = document.getElementById("overallProgressRing");
   const circ = 2 * Math.PI * 70;
@@ -439,7 +472,7 @@ function updateCalculations() {
   document.getElementById("overallPct").textContent          = hasLogs ? `${Math.round(actualPct)}%` : "—";
   document.getElementById("overallRatio").textContent         = `${totalAttended} / ${totalConducted}`;
   document.getElementById("overallEffectivePct").textContent  = hasLogs ? `${Math.round(effectivePct)}%` : "—";
-  document.getElementById("overallEffectiveRatio").textContent= `(${totalAttended+totalSubmitted}/${totalConducted} with logs)`;
+  document.getElementById("overallEffectiveRatio").textContent= `(${totalAttended+totalLoggedMissed}/${totalConducted} with logs)`;
 
   const target = 67;
   const si   = document.getElementById("overallStatus");
@@ -460,7 +493,7 @@ function updateCalculations() {
     si.textContent = "Critical"; si.className = "status-indicator danger";
     const need = Math.ceil((target * totalConducted - 100 * totalAttended) / (100 - target));
     hint.innerHTML = effectivePct >= target
-      ? `Below target, but submitted logs can help. Attend next <strong>${need}</strong> more.`
+      ? `Physical attendance below 67%, but society logs cover it! Attend next <strong>${need}</strong> more.`
       : `Attend next <strong>${need}</strong> class${need>1?"es":""} to recover to 67%.`;
   }
 
