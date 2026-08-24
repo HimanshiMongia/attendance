@@ -23,23 +23,43 @@ AuraAttend operates entirely inside your web browser. There is no server install
    - **Retroactive Logs Editor**: Click any calendar day to open an overlay panel and edit/backfill past logs immediately.
 
 4. **Data Portability**:
+   - **Automatic folder storage**: When running via Streamlit or `storage_server.py`, attendance is saved under `data/` as plain JSON files (one file per day in `data/logs/`).
    - **Export backup (JSON)**: Save a copy of your configurations and logs to a file.
    - **Import backup (JSON)**: Load backups instantly on any device or browser.
    - **Clean Reset**: Fully wipe the browser store if you want to start fresh.
+
+See [`data/README.md`](data/README.md) for the on-disk file format.
 
 ---
 
 ## 💻 How to Run
 
-Since AuraAttend is a vanilla web application, it does not require any compile step or package managers:
+### Option A — Streamlit (deploy + auto-save to `data/` folder)
 
-1. **Double Click**: Simply open [index.html](file:///c:/Users/Himanshi%20Mongia/attendance/index.html) directly in any web browser.
-2. **VS Code Live Server (Recommended)**: If you use VS Code, right-click `index.html` and select **Open with Live Server** to host it locally.
-3. **Local Dev Server**: Alternatively, run a quick server from this workspace directory:
+```bash
+python -m pip install -r requirements.txt
+python -m streamlit run streamlit_app.py
+```
+
+Attendance syncs every few seconds into the `data/` folder as readable JSON files.
+
+### Option B — Local server (auto-save to `data/` folder)
+
+```bash
+python storage_server.py
+```
+
+Open `http://127.0.0.1:8080` — every change is saved immediately to `data/`.
+
+### Option C — Browser only (localStorage)
+
+1. **Double Click**: Open `index.html` directly in any web browser.
+2. **VS Code Live Server**: Right-click `index.html` → **Open with Live Server**.
+3. **Quick static server**:
    ```bash
    npx http-server -p 3000
    ```
-   Then open `http://localhost:3000` in your browser.
+   Data stays in browser localStorage unless you export a backup.
 
 ---
 

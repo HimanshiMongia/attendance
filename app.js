@@ -91,11 +91,15 @@ const DEFAULT_STATE = {
 };
 
 // ================= GLOBAL STATE =================
+const STORAGE_KEY = "aura_attend_state_v3";
+const STORAGE_TS_KEY = "aura_attend_state_v3_ts";
+
 let state = {};
 let selectedDate = new Date();
 let calendarCurrentMonth = new Date().getMonth();
 let calendarCurrentYear = new Date().getFullYear();
 let logFilterSubjectId = "all";
+let selectedSubjectsMonth = "all";
 
 // ================= INIT =================
 function init() {
@@ -105,33 +109,123 @@ function init() {
   updateCalculations();
   renderTab("dashboard");
   populateLogFilterDropdown();
+  populateSubjectsMonthDropdown();
+}
+
+function applyStateMigrations() {
+  (state.subjects || []).forEach(s => { if (s.target === 75) s.target = 67; });
+  Object.keys(state.attendanceLogs || {}).forEach(date => {
+    Object.keys(state.attendanceLogs[date]).forEach(key => {
+      const log = state.attendanceLogs[date][key];
+      if (log.status === "LoggedMissed" && log.submitted === undefined) log.submitted = false;
+    });
+  });
+}
+
+function parseStoredState(raw) {
+  const parsed = JSON.parse(raw);
+  if (!parsed || !Array.isArray(parsed.subjects) || typeof parsed.timetable !== "object") {
+    throw new Error("Invalid stored state");
+  }
+  return parsed;
+}
+
+function mergeAttendanceLogs(targetLogs, sourceLogs) {
+  if (!sourceLogs || typeof sourceLogs !== "object") return;
+  Object.keys(sourceLogs).forEach(dateStr => {
+    if (!targetLogs[dateStr]) targetLogs[dateStr] = {};
+    const dayLogs = sourceLogs[dateStr];
+    if (dayLogs && typeof dayLogs === "object") {
+      Object.keys(dayLogs).forEach(key => {
+        if (!targetLogs[dateStr][key]) {
+          targetLogs[dateStr][key] = dayLogs[key];
+        } else {
+          // Keep non-null status
+          if (!targetLogs[dateStr][key].status && dayLogs[key].status) {
+            targetLogs[dateStr][key] = dayLogs[key];
+          }
+        }
+      });
+    }
+  });
 }
 
 function loadState() {
-  const saved = localStorage.getItem("aura_attend_state_v3");
-  if (saved) {
-    try {
-      state = JSON.parse(saved);
-      // Migration: update target 75 → 67
-      (state.subjects || []).forEach(s => { if (s.target === 75) s.target = 67; });
-      // Migration: ensure submitted field
-      Object.keys(state.attendanceLogs || {}).forEach(date => {
-        Object.keys(state.attendanceLogs[date]).forEach(key => {
-          const log = state.attendanceLogs[date][key];
-          if (log.status === "LoggedMissed" && log.submitted === undefined) log.submitted = false;
-        });
-      });
-    } catch (e) {
-      state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  const serverState = window.__INITIAL_STATE__;
+  const savedV3 = localStorage.getItem(STORAGE_KEY);
+  const savedV2 = localStorage.getItem("aura_attend_state_v2");
+  const savedV1 = localStorage.getItem("aura_attend_state");
+
+  let baseState = null;
+
+  try {
+    if (serverState && Array.isArray(serverState.subjects)) {
+      baseState = serverState;
     }
-  } else {
-    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
-    saveState();
+
+    if (savedV3) {
+      const parsed = parseStoredState(savedV3);
+      if (!baseState) {
+        baseState = parsed;
+      } else {
+        mergeAttendanceLogs(baseState.attendanceLogs, parsed.attendanceLogs);
+      }
+    }
+
+    if (savedV2) {
+      try {
+        const parsedV2 = JSON.parse(savedV2);
+        if (parsedV2 && parsedV2.attendanceLogs) {
+          if (!baseState) baseState = parsedV2;
+          else mergeAttendanceLogs(baseState.attendanceLogs, parsedV2.attendanceLogs);
+        }
+      } catch (e) {}
+    }
+
+    if (savedV1) {
+      try {
+        const parsedV1 = JSON.parse(savedV1);
+        if (parsedV1 && parsedV1.attendanceLogs) {
+          if (!baseState) baseState = parsedV1;
+          else mergeAttendanceLogs(baseState.attendanceLogs, parsedV1.attendanceLogs);
+        }
+      } catch (e) {}
+    }
+
+    if (baseState) {
+      state = baseState;
+      applyStateMigrations();
+      persistStateLocally();
+      delete window.__INITIAL_STATE__;
+      return;
+    }
+  } catch (e) {
+    console.warn("AuraAttend: error loading saved state, preserving fallback.", e);
   }
+
+  state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  persistStateLocally();
+}
+
+function persistStateLocally() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORAGE_TS_KEY, String(Date.now()));
+}
+
+function syncStateToServer() {
+  const endpoint = window.__STORAGE_API__;
+  if (!endpoint) return;
+
+  fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(state)
+  }).catch(err => console.warn("AuraAttend: server sync failed.", err));
 }
 
 function saveState() {
-  localStorage.setItem("aura_attend_state_v3", JSON.stringify(state));
+  persistStateLocally();
+  syncStateToServer();
 }
 
 // ================= DATE HELPERS =================
@@ -672,18 +766,153 @@ function deleteExtraClass(dateStr, key) {
   }
 }
 
+// ================= CALCULATIONS =================
+
+function getAvailableMonths() {
+  const months = new Set();
+  const logs = state.attendanceLogs || {};
+  Object.keys(logs).forEach(dstr => {
+    if (dstr.length >= 7) months.add(dstr.slice(0, 7));
+  });
+  const currentMonth = getLocalDateString(new Date()).slice(0, 7);
+  months.add(currentMonth);
+  return Array.from(months).sort().reverse();
+}
+
+function populateSubjectsMonthDropdown() {
+  const select = document.getElementById("subjectsMonthSelect");
+  if (!select) return;
+  const currentVal = selectedSubjectsMonth || "all";
+  select.innerHTML = `<option value="all">Overall (Cumulative)</option>`;
+  
+  const months = getAvailableMonths();
+  months.forEach(m => {
+    const d = new Date(m + "-01T12:00:00");
+    const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = label;
+    select.appendChild(opt);
+  });
+  select.value = currentVal;
+}
+
+function calculateSubjectStats(subjectId, monthFilter = "all") {
+  let attended = 0, missed = 0, loggedMissed = 0, submitted = 0, cancelled = 0;
+  const byType = {
+    Lecture:   { attended:0, missed:0, loggedMissed:0, submitted:0, conducted:0 },
+    Tutorial:  { attended:0, missed:0, loggedMissed:0, submitted:0, conducted:0 },
+    Practical: { attended:0, missed:0, loggedMissed:0, submitted:0, conducted:0 }
+  };
+
+  Object.keys(state.attendanceLogs || {}).forEach(dateStr => {
+    if (monthFilter !== "all" && !dateStr.startsWith(monthFilter)) return;
+    const dayLogs = state.attendanceLogs[dateStr] || {};
+    Object.values(dayLogs).forEach(log => {
+      if (log.subjectId !== subjectId) return;
+      const t = byType[log.type] || byType.Lecture;
+      if      (log.status === "Attended")     { attended++;    t.attended++; }
+      else if (log.status === "Missed")       { missed++;      t.missed++;   }
+      else if (log.status === "LoggedMissed") {
+        loggedMissed++; t.loggedMissed++;
+        if (log.submitted) { submitted++; t.submitted++; }
+      }
+      else if (log.status === "Cancelled")    { cancelled++; }
+    });
+  });
+
+  const conducted = attended + missed + loggedMissed;
+  const actualPct    = conducted > 0 ? (attended / conducted) * 100 : 100;
+  const effectivePct = conducted > 0 ? ((attended + submitted) / conducted) * 100 : 100;
+
+  ["Lecture","Tutorial","Practical"].forEach(t => {
+    const d = byType[t];
+    d.conducted = d.attended + d.missed + d.loggedMissed;
+    d.actualPct    = d.conducted > 0 ? (d.attended / d.conducted) * 100 : 100;
+    d.effectivePct = d.conducted > 0 ? ((d.attended + d.submitted) / d.conducted) * 100 : 100;
+  });
+
+  return { attended, missed, loggedMissed, submitted, conducted, actualPct, effectivePct, cancelled, byType };
+}
+
 // ================= SUBJECTS ANALYTICS =================
 function renderSubjectsAnalytics() {
+  populateSubjectsMonthDropdown();
+  const filterMonth = selectedSubjectsMonth || "all";
+  
+  // 1. Render Side-by-Side Comparison Table for Selected Month / Overall
+  const tableContainer = document.getElementById("monthlySummaryTableContainer");
+  if (tableContainer) {
+    let monthTitle = "Overall Cumulative Summary";
+    if (filterMonth !== "all") {
+      const d = new Date(filterMonth + "-01T12:00:00");
+      monthTitle = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + " Record";
+    }
+
+    let rowsHTML = "";
+    state.subjects.forEach(subj => {
+      const stats = calculateSubjectStats(subj.id, filterMonth);
+      const isSafe = stats.actualPct >= subj.target;
+      const isEffSafe = stats.effectivePct >= subj.target;
+      
+      const badgeCls = isSafe ? "safe" : (isEffSafe ? "effective-badge" : "danger");
+      const statusText = isSafe ? "On Track" : (isEffSafe ? "Log Covered" : "Critical");
+
+      rowsHTML += `
+        <tr>
+          <td style="font-weight:700;">${subj.name}</td>
+          <td><span class="subj-card-code">${subj.code||"—"}</span></td>
+          <td style="font-weight:600;">${stats.conducted}</td>
+          <td style="color:var(--color-attended);font-weight:700;">${stats.attended}</td>
+          <td style="color:var(--color-missed);font-weight:600;">${stats.missed}</td>
+          <td style="color:var(--color-logged);font-weight:600;">${stats.loggedMissed} (${stats.submitted} sub)</td>
+          <td><span class="pct-badge ${badgeCls}">${Math.round(stats.actualPct)}%</span></td>
+          <td><span class="pct-badge effective-badge">${Math.round(stats.effectivePct)}%</span></td>
+          <td><span class="pct-badge ${badgeCls}">${statusText}</span></td>
+        </tr>`;
+    });
+
+    tableContainer.innerHTML = `
+      <div class="card-header flex-column md-flex-row justify-content-space-between align-items-start md-align-items-center">
+        <div>
+          <h3 style="font-family:var(--font-title);font-size:1.1rem;font-weight:700;">${monthTitle}</h3>
+          <p class="subtitle" style="font-size:0.75rem;">Month-wise view to compare directly with college portal updates.</p>
+        </div>
+      </div>
+      <div class="table-responsive-wrapper">
+        <table class="monthly-summary-table">
+          <thead>
+            <tr>
+              <th>Subject</th>
+              <th>Code</th>
+              <th>Conducted</th>
+              <th>Attended</th>
+              <th>Missed</th>
+              <th>Event Logs</th>
+              <th>Physical %</th>
+              <th>Effective %</th>
+              <th>Status (67%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHTML}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // 2. Render Detail Cards
   const grid = document.getElementById("subjectsDetailGrid");
+  if (!grid) return;
   grid.innerHTML = "";
 
   state.subjects.forEach(subj => {
-    const stats = calculateSubjectStats(subj.id);
+    const stats = calculateSubjectStats(subj.id, filterMonth);
     const good  = stats.actualPct >= subj.target;
 
     let advice = "";
     if (stats.conducted === 0) {
-      advice = "No classes logged yet.";
+      advice = "No classes recorded for this selection.";
     } else if (good) {
       const canMiss = Math.floor((100 * stats.attended - subj.target * stats.conducted) / subj.target);
       advice = canMiss > 0
@@ -692,7 +921,7 @@ function renderSubjectsAnalytics() {
     } else {
       const need = Math.ceil((subj.target * stats.conducted - 100 * stats.attended) / (100 - subj.target));
       advice = stats.effectivePct >= subj.target
-        ? `Below target, but logs can help. Attend <strong>${need}</strong> more.`
+        ? `Below target, but logs cover it. Attend <strong>${need}</strong> more.`
         : `Attend next <strong>${need}</strong> class${need!==1?"es":""} to reach ${subj.target}%.`;
     }
 
@@ -1077,6 +1306,63 @@ function openDayLogsModal(date) {
 }
 
 // ================= DATA MANAGEMENT =================
+function exportToExcelCSV() {
+  const months = getAvailableMonths();
+  let csvContent = "\uFEFF"; // UTF-8 BOM for Excel compatibility
+
+  // Section 1: Monthly Subject Attendance Breakdown Table
+  csvContent += "SECTION 1: MONTH-WISE SUBJECT ATTENDANCE SUMMARY\n";
+  csvContent += "Month,Subject Code,Subject Name,Target %,Conducted,Attended,Missed,Event Logs,Logs Submitted,Cancelled,Physical Attendance %,Effective Attendance %,Status\n";
+
+  months.forEach(m => {
+    const d = new Date(m + "-01T12:00:00");
+    const monthLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    state.subjects.forEach(s => {
+      const stats = calculateSubjectStats(s.id, m);
+      const physPct = Math.round(stats.actualPct);
+      const effPct = Math.round(stats.effectivePct);
+      const statusText = stats.actualPct >= s.target ? "On Track" : (stats.effectivePct >= s.target ? "Log Covered" : "Critical");
+
+      const snameEsc = s.name.replace(/"/g, '""');
+      csvContent += `"${monthLabel}","${s.code||''}","${snameEsc}",${s.target},${stats.conducted},${stats.attended},${stats.missed},${stats.loggedMissed},${stats.submitted},${stats.cancelled},${physPct}%,${effPct}%,"${statusText}"\n`;
+    });
+  });
+
+  csvContent += "\nSECTION 2: ALL CLASS LOG RECORDS\n";
+  csvContent += "Date,Month,Time Slot,Subject Code,Subject Name,Class Type,Attendance Status,Log Submitted,Extra Class\n";
+
+  const allDates = Object.keys(state.attendanceLogs || {}).sort().reverse();
+  allDates.forEach(dstr => {
+    const d = new Date(dstr + "T12:00:00");
+    const monthLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const dayLogs = state.attendanceLogs[dstr] || {};
+
+    Object.keys(dayLogs).sort().forEach(k => {
+      const log = dayLogs[k];
+      const subj = state.subjects.find(s => s.id === log.subjectId) || {};
+      const snameEsc = (log.subjectName || subj.name || "").replace(/"/g, '""');
+      const timeSlot = (log.timeSlot || "").replace(/"/g, '""');
+      const subText = log.submitted ? "Yes" : (log.status === "LoggedMissed" ? "No" : "-");
+      const extraText = log.isExtra ? "Yes" : "No";
+
+      csvContent += `"${dstr}","${monthLabel}","${timeSlot}","${subj.code||''}","${snameEsc}","${log.type||'Lecture'}","${log.status||'Unmarked'}","${subText}","${extraText}"\n`;
+    });
+  });
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const d = new Date();
+  a.download = `attendance_monthly_records_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast("Exported Excel / CSV Spreadsheet!", "success");
+}
+
 function exportDataBackup() {
   const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
   const a = document.createElement("a"); a.href = str;
@@ -1123,6 +1409,24 @@ function setupEventListeners() {
   document.getElementById("extraClassForm").addEventListener("submit", handleExtraClassSubmit);
 
   document.getElementById("filterSubject").addEventListener("change", e => { logFilterSubjectId = e.target.value; renderLogsTracker(); });
+
+  const monthSel = document.getElementById("subjectsMonthSelect");
+  if (monthSel) {
+    monthSel.addEventListener("change", e => {
+      selectedSubjectsMonth = e.target.value;
+      renderSubjectsAnalytics();
+    });
+  }
+
+  const btnExpSubj = document.getElementById("btnExportExcelSubjects");
+  if (btnExpSubj) {
+    btnExpSubj.addEventListener("click", exportToExcelCSV);
+  }
+
+  const btnExpData = document.getElementById("btnExportExcelData");
+  if (btnExpData) {
+    btnExpData.addEventListener("click", exportToExcelCSV);
+  }
 
   document.getElementById("btnAddSubject")       .addEventListener("click", () => window.openSubjectModal());
   document.getElementById("btnCloseSubjectModal") .addEventListener("click", closeSubjectModal);

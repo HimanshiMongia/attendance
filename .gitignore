@@ -1,0 +1,18 @@
+# AuraAttend data folder
+#
+# Your attendance records are saved here as plain JSON & spreadsheets.
+# Do not commit personal attendance files to public Git repos.
+
+/data/subjects.json
+/data/timetable.json
+/data/meta.json
+/data/logs/*.json
+/data/*.csv
+/data/*.xlsx
+
+# Keep folder structure
+!data/README.md
+!data/logs/.gitkeep
+
+__pycache__/
+*.pyc

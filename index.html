@@ -159,10 +159,32 @@
       <!-- ================= SUBJECTS TAB ================= -->
       <section class="tab-content" id="tabSubjects">
         <div class="analytics-layout">
-          <div class="analytics-row-header">
-            <h2>Subject-wise Performance</h2>
-            <p class="subtitle">Detailed breakdown showing overall physical and effective rates, along with Lecture and Tutorial stats separately.</p>
+          <div class="analytics-row-header flex-column md-flex-row align-items-start md-align-items-center justify-content-space-between">
+            <div class="card-title-group">
+              <h2>Subject-wise Attendance</h2>
+              <p class="subtitle">Filter month-wise to easily cross-check records with your college attendance list.</p>
+            </div>
+            <div class="subjects-filter-bar">
+              <div class="filter-group">
+                <label for="subjectsMonthSelect" class="filter-label">Month:</label>
+                <select id="subjectsMonthSelect" class="btn btn-secondary btn-sm month-select-dropdown">
+                  <option value="all">Overall (Cumulative)</option>
+                  <!-- Month options populated dynamically -->
+                </select>
+              </div>
+              <button class="btn btn-primary btn-sm btn-excel" id="btnExportExcelSubjects" title="Export Month-wise Sheet to Excel / CSV">
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                <span>Export Sheet (Excel)</span>
+              </button>
+            </div>
           </div>
+
+          <!-- Month-Wise Side-by-Side Comparison Table -->
+          <div class="glass-card monthly-summary-card" id="monthlySummaryTableContainer">
+            <!-- Summary table rendered dynamically -->
+          </div>
+
+          <!-- Cards Grid for Subject Analytics -->
           <div class="subjects-detail-grid" id="subjectsDetailGrid">
             <!-- Subject detail cards injected dynamically -->
           </div>
@@ -303,9 +325,14 @@
             <!-- Historical Log Editor & Data Options -->
             <div class="glass-card data-management-card">
               <h2>Data Management</h2>
-              <p class="subtitle text-margin">AuraAttend works locally inside your browser. Export backups so you never lose your records.</p>
+              <p class="subtitle text-margin">Your attendance records are automatically saved and exported to Excel / CSV format in the <strong>data/</strong> folder on Streamlit & local server. Download backups or spreadsheets anytime below.</p>
               
               <div class="data-actions-vertical">
+                <button class="btn btn-primary w-full btn-excel" id="btnExportExcelData">
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                  <span>Export Excel / CSV Sheet</span>
+                </button>
+
                 <button class="btn btn-outline w-full" id="btnExportData">
                   <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                   <span>Export Backup (JSON)</span>
