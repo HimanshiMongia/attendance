@@ -190,10 +190,8 @@ function mergeAttendanceLogs(targetLogs, sourceLogs) {
         if (!targetLogs[dateStr][key]) {
           targetLogs[dateStr][key] = dayLogs[key];
         } else {
-          // Keep non-null status
-          if (!targetLogs[dateStr][key].status && dayLogs[key].status) {
-            targetLogs[dateStr][key] = dayLogs[key];
-          }
+          // Merge sourceLogs over targetLogs so user local actions (submitted: false, note) take precedence
+          targetLogs[dateStr][key] = { ...targetLogs[dateStr][key], ...dayLogs[key] };
         }
       });
     }
@@ -209,36 +207,33 @@ function loadState() {
   let baseState = null;
 
   try {
-    if (serverState && Array.isArray(serverState.subjects)) {
-      baseState = serverState;
-    }
-
     if (savedV3) {
-      const parsed = parseStoredState(savedV3);
-      if (!baseState) {
-        baseState = parsed;
-      } else {
-        mergeAttendanceLogs(baseState.attendanceLogs, parsed.attendanceLogs);
-      }
-    }
-
-    if (savedV2) {
       try {
-        const parsedV2 = JSON.parse(savedV2);
-        if (parsedV2 && parsedV2.attendanceLogs) {
-          if (!baseState) baseState = parsedV2;
-          else mergeAttendanceLogs(baseState.attendanceLogs, parsedV2.attendanceLogs);
-        }
+        baseState = parseStoredState(savedV3);
       } catch (e) {}
     }
 
-    if (savedV1) {
+    if (serverState && Array.isArray(serverState.subjects)) {
+      if (!baseState) {
+        baseState = serverState;
+      } else {
+        // Merge serverState with baseState giving local user edits priority
+        mergeAttendanceLogs(serverState.attendanceLogs, baseState.attendanceLogs);
+        baseState.attendanceLogs = serverState.attendanceLogs;
+      }
+    }
+
+    if (savedV2 && !baseState) {
+      try {
+        const parsedV2 = JSON.parse(savedV2);
+        if (parsedV2 && parsedV2.attendanceLogs) baseState = parsedV2;
+      } catch (e) {}
+    }
+
+    if (savedV1 && !baseState) {
       try {
         const parsedV1 = JSON.parse(savedV1);
-        if (parsedV1 && parsedV1.attendanceLogs) {
-          if (!baseState) baseState = parsedV1;
-          else mergeAttendanceLogs(baseState.attendanceLogs, parsedV1.attendanceLogs);
-        }
+        if (parsedV1 && parsedV1.attendanceLogs) baseState = parsedV1;
       } catch (e) {}
     }
 
