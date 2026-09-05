@@ -319,6 +319,7 @@ def state_to_files(state: dict) -> None:
                     "timeSlot": log.get("timeSlot"),
                     "isExtra": bool(log.get("isExtra", False)),
                     "submitted": log.get("submitted"),
+                    "note": log.get("note", ""),
                 }
             )
 
@@ -381,6 +382,8 @@ def files_to_state() -> dict | None:
             }
             if entry.get("submitted") is not None:
                 day_logs[key]["submitted"] = entry["submitted"]
+            if entry.get("note"):
+                day_logs[key]["note"] = entry["note"]
         if day_logs:
             attendance_logs[date_str] = day_logs
 

@@ -1267,13 +1267,14 @@ function openSubjectMonthModal(subjectId, monthKey) {
 
       const noteInput = card.querySelector(".modal-note-input");
       if (noteInput) {
-        noteInput.addEventListener("change", (e) => {
+        const saveNote = (val) => {
           if (!state.attendanceLogs[dstr]) state.attendanceLogs[dstr] = {};
           if (!state.attendanceLogs[dstr][key]) state.attendanceLogs[dstr][key] = { ...item.log };
-          state.attendanceLogs[dstr][key].note = e.target.value.trim();
+          state.attendanceLogs[dstr][key].note = val;
           saveState();
-          showToast("Note saved", "success");
-        });
+        };
+        noteInput.addEventListener("input", (e) => saveNote(e.target.value));
+        noteInput.addEventListener("change", (e) => saveNote(e.target.value.trim()));
       }
 
       card.querySelectorAll(".vote-btn").forEach(btn => {
@@ -1360,13 +1361,16 @@ function renderLogsTracker() {
     });
 
     const noteInput = tr.querySelector(".note-inline-input");
-    noteInput.addEventListener("change", (e) => {
-      if (state.attendanceLogs[log.dateStr]?.[log.key]) {
-        state.attendanceLogs[log.dateStr][log.key].note = e.target.value.trim();
-        saveState();
-        showToast("Saved log note", "success");
-      }
-    });
+    if (noteInput) {
+      const saveTrackerNote = (val) => {
+        if (state.attendanceLogs[log.dateStr]?.[log.key]) {
+          state.attendanceLogs[log.dateStr][log.key].note = val;
+          saveState();
+        }
+      };
+      noteInput.addEventListener("input", (e) => saveTrackerNote(e.target.value));
+      noteInput.addEventListener("change", (e) => saveTrackerNote(e.target.value.trim()));
+    }
 
     tbody.appendChild(tr);
   });
