@@ -387,11 +387,15 @@ function logAttendance(dateStr, key, slot, status) {
     if (!Object.keys(state.attendanceLogs[dateStr]).length) delete state.attendanceLogs[dateStr];
     showToast(`Cleared ${slot.subjectName}`, "info");
   } else {
+    const existing = state.attendanceLogs[dateStr][key];
+    const prevSubmitted = existing ? (existing.submitted || false) : false;
+    const prevNote = existing ? (existing.note || "") : "";
     state.attendanceLogs[dateStr][key] = {
       subjectId: slot.subjectId, subjectName: slot.subjectName,
       type: slot.type, status, timeSlot: slot.timeSlot,
       isExtra: slot.isExtra || false,
-      submitted: status === "LoggedMissed" ? true : undefined
+      submitted: status === "LoggedMissed" ? prevSubmitted : undefined,
+      note: prevNote
     };
     const labels = { Attended:["Attended","success"], Missed:["Missed","error"], LoggedMissed:["Event Log","logged"], Cancelled:["Cancelled","info"] };
     showToast(`${slot.subjectName}: ${labels[status][0]}`, labels[status][1]);
@@ -407,14 +411,18 @@ function logGroupAttendance(dateStr, keys, slotsConfig, status) {
 
   keys.forEach((key, i) => {
     const cfg = slotsConfig[i];
+    const existing = state.attendanceLogs[dateStr]?.[key];
     if (allSame) {
       delete state.attendanceLogs[dateStr][key];
     } else {
+      const prevSubmitted = existing ? (existing.submitted || false) : false;
+      const prevNote = existing ? (existing.note || "") : "";
       state.attendanceLogs[dateStr][key] = {
         subjectId: cfg.subjectId, subjectName: cfg.subjectName,
         type: cfg.type, status, timeSlot: cfg.timeSlot,
         isExtra: false,
-        submitted: status === "LoggedMissed" ? true : undefined
+        submitted: status === "LoggedMissed" ? prevSubmitted : undefined,
+        note: prevNote
       };
     }
   });
@@ -478,7 +486,7 @@ function calculateSubjectStats(subjectId, monthFilter = "all") {
       else if (log.status === "Missed")       { missed++;      t.missed++;   }
       else if (log.status === "LoggedMissed") {
         loggedMissed++; t.loggedMissed++;
-        submitted++; t.submitted++;
+        if (log.submitted) { submitted++; t.submitted++; }
       }
       else if (log.status === "Cancelled")    { cancelled++; }
     });
