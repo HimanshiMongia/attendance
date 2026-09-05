@@ -1025,24 +1025,30 @@ function renderSubjectsAnalytics() {
 
       let typePills = "";
       if (lec.conducted > 0) {
+        const hasMissed = lec.attended < lec.conducted;
+        const colorStyle = hasMissed ? "color: var(--color-missed);" : "color: var(--color-attended);";
         typePills += `
           <div class="type-stat-pill">
             <span class="type-name badge-type lecture">Lecture</span>
-            <span class="type-ratio">${lec.attended}/${lec.conducted} <small style="opacity:0.75;">(${Math.round(lec.actualPct)}%)</small></span>
+            <span class="type-ratio" style="${colorStyle} font-weight:700;">${lec.attended}/${lec.conducted} <small style="opacity:0.85;">(${Math.round(lec.actualPct)}%)</small></span>
           </div>`;
       }
       if (tut.conducted > 0) {
+        const hasMissed = tut.attended < tut.conducted;
+        const colorStyle = hasMissed ? "color: var(--color-missed);" : "color: var(--color-attended);";
         typePills += `
           <div class="type-stat-pill">
             <span class="type-name badge-type tutorial">Tutorial</span>
-            <span class="type-ratio">${tut.attended}/${tut.conducted} <small style="opacity:0.75;">(${Math.round(tut.actualPct)}%)</small></span>
+            <span class="type-ratio" style="${colorStyle} font-weight:700;">${tut.attended}/${tut.conducted} <small style="opacity:0.85;">(${Math.round(tut.actualPct)}%)</small></span>
           </div>`;
       }
       if (prac.conducted > 0) {
+        const hasMissed = prac.attended < prac.conducted;
+        const colorStyle = hasMissed ? "color: var(--color-missed);" : "color: var(--color-attended);";
         typePills += `
           <div class="type-stat-pill">
             <span class="type-name badge-type practical">Practical</span>
-            <span class="type-ratio">${prac.attended}/${prac.conducted} <small style="opacity:0.75;">(${Math.round(prac.actualPct)}%)</small></span>
+            <span class="type-ratio" style="${colorStyle} font-weight:700;">${prac.attended}/${prac.conducted} <small style="opacity:0.85;">(${Math.round(prac.actualPct)}%)</small></span>
           </div>`;
       }
 
