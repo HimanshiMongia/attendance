@@ -126,13 +126,49 @@ function applyStateMigrations() {
   if (!hasH5) state.timetable.Wed.push({ hourIndex: 5, subjectId: "la", type: "Tutorial" });
   state.timetable.Wed.sort((a, b) => a.hourIndex - b.hourIndex);
 
-  Object.keys(state.attendanceLogs || {}).forEach(date => {
-    Object.keys(state.attendanceLogs[date]).forEach(key => {
-      const log = state.attendanceLogs[date][key];
-      if (log.status === "LoggedMissed" && log.submitted === undefined) {
-        log.submitted = false;
-      }
-    });
+  // Clean up duplicate Extra class entries on Wednesday afternoons for LA (Legal Aspects / LAB)
+  Object.keys(state.attendanceLogs || {}).forEach(dstr => {
+    const dObj = new Date(dstr + "T12:00:00");
+    if (dObj.getDay() === 3) { // Wednesday
+      const dayLogs = state.attendanceLogs[dstr];
+      if (!dayLogs) return;
+
+      const keys = Object.keys(dayLogs);
+
+      keys.forEach(key => {
+        if (key.startsWith("Extra_")) {
+          const log = dayLogs[key];
+          const isLA = log.subjectId === "la" || (log.subjectName && log.subjectName.toLowerCase().includes("legal"));
+          const timeSlot = log.timeSlot || "";
+          
+          if (isLA) {
+            if (timeSlot.includes("01:30") || timeSlot.includes("1:30")) {
+              if (log.status && (!dayLogs["Wed_4"] || !dayLogs["Wed_4"].status)) {
+                dayLogs["Wed_4"] = { subjectId: "la", subjectName: log.subjectName || "Legal Aspects", type: "Lecture", status: log.status, timeSlot: "01:30 PM - 02:30 PM", isExtra: false, submitted: log.submitted || false, note: log.note || "" };
+              }
+              delete dayLogs[key];
+            } else if (timeSlot.includes("02:30") || timeSlot.includes("2:30")) {
+              if (log.status && (!dayLogs["Wed_5"] || !dayLogs["Wed_5"].status)) {
+                dayLogs["Wed_5"] = { subjectId: "la", subjectName: log.subjectName || "Legal Aspects", type: "Tutorial", status: log.status, timeSlot: "02:30 PM - 03:30 PM", isExtra: false, submitted: log.submitted || false, note: log.note || "" };
+              }
+              delete dayLogs[key];
+            }
+          }
+        }
+      });
+
+      if (!Object.keys(dayLogs).length) delete state.attendanceLogs[dstr];
+    }
+
+    // Default LoggedMissed to submitted: false if undefined
+    if (state.attendanceLogs[dstr]) {
+      Object.keys(state.attendanceLogs[dstr]).forEach(key => {
+        const log = state.attendanceLogs[dstr][key];
+        if (log.status === "LoggedMissed" && log.submitted === undefined) {
+          log.submitted = false;
+        }
+      });
+    }
   });
 }
 
@@ -1068,7 +1104,7 @@ function openSubjectMonthModal(subjectId, monthKey) {
   const monthName = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   document.getElementById("subjMonthModalTitle").textContent = `${subj.name} (${subj.code || ''})`;
-  document.getElementById("subjMonthModalSub").textContent = `Class History & Logs for ${monthName}`;
+  document.getElementById("subjMonthModalSub").textContent = `Class History & Absences for ${monthName}`;
 
   const monthStats = calculateSubjectStats(subjectId, monthKey);
   const summaryBar = document.getElementById("subjMonthSummaryBar");
@@ -1134,48 +1170,107 @@ function openSubjectMonthModal(subjectId, monthKey) {
   if (!dates.length) {
     container.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text-secondary);">No classes held for ${subj.name} in ${monthName}.</div>`;
   } else {
-    dates.forEach(item => {
-      const dObj = new Date(item.dateStr + "T12:00:00");
-      const dDisplay = dObj.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
-      const status = item.log.status || "Unmarked";
-      const isExtra = item.log.isExtra;
+    const missedOrLogged = dates.filter(d => d.log.status === "Missed" || d.log.status === "LoggedMissed");
+    const attendedClasses = dates.filter(d => d.log.status === "Attended");
 
-      const row = document.createElement("div");
-      row.className = "day-log-edit-item";
-      row.innerHTML = `
-        <div class="edit-item-name-group" style="flex:1;">
-          <span class="edit-item-subject">${dDisplay} — ${item.log.type || 'Class'} ${isExtra?'<span class="badge-extra">EXTRA</span>':''}</span>
-          <span class="edit-item-time">${item.log.timeSlot || ''}</span>
-          ${status==='LoggedMissed'?`<input type="text" class="note-inline-input modal-note-input" style="margin-top:0.35rem;" placeholder="+ Add event note (e.g. Enactus Drive)..." value="${item.log.note||''}">`:''}
-        </div>
-        <div class="vote-buttons">
-          ${buildVoteBtns(status)}
+    let html = "";
+
+    // 1. PRIMARY FOCUS: Missed & Event Logs
+    if (missedOrLogged.length > 0) {
+      html += `
+        <div class="absent-logs-focus-box">
+          <div class="focus-box-title">
+            ⚠️ Missed Classes & Event Logs (${missedOrLogged.length})
+          </div>`;
+
+      missedOrLogged.forEach(item => {
+        const dObj = new Date(item.dateStr + "T12:00:00");
+        const dayName = dObj.toLocaleDateString('en-IN', { weekday: 'short' });
+        const dateNum = dObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+        const status = item.log.status;
+        const startTime = (item.log.timeSlot || "").split(" - ")[0] || "";
+        const isLogged = status === "LoggedMissed";
+
+        html += `
+          <div class="focus-item-card ${isLogged ? 'logged-card' : 'missed-card'}" data-date="${item.dateStr}" data-key="${item.key}">
+            <div class="focus-item-top">
+              <div>
+                <span class="focus-item-date">${dayName}, ${dateNum}</span>
+                <span style="font-size:0.775rem;color:var(--text-secondary);margin-left:0.4rem;">· ${startTime} (${item.log.type || 'Lecture'})</span>
+              </div>
+              <span class="status-badge ${isLogged ? 'logged' : 'missed'}">${isLogged ? 'Event Log 📋' : 'Missed ✗'}</span>
+            </div>
+            ${isLogged ? `
+              <div style="margin-top:0.25rem;">
+                <input type="text" class="note-inline-input modal-note-input" placeholder="+ Add event note (e.g. Enactus Drive)..." value="${item.log.note || ''}">
+              </div>
+            ` : ''}
+            <div class="vote-buttons" style="margin-top:0.35rem;justify-content:flex-end;">
+              ${buildVoteBtns(status)}
+            </div>
+          </div>`;
+      });
+
+      html += `</div>`;
+    } else {
+      html += `
+        <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:12px;padding:0.85rem;margin-bottom:1rem;color:#34d399;font-size:0.85rem;font-weight:600;">
+          🎉 Perfect Record! No missed classes or event logs in ${monthName}.
         </div>`;
+    }
 
-      const modalNoteInput = row.querySelector(".modal-note-input");
-      if (modalNoteInput) {
-        modalNoteInput.addEventListener("change", (e) => {
-          if (!state.attendanceLogs[item.dateStr]) state.attendanceLogs[item.dateStr] = {};
-          if (!state.attendanceLogs[item.dateStr][item.key]) {
-            state.attendanceLogs[item.dateStr][item.key] = { ...item.log };
-          }
-          state.attendanceLogs[item.dateStr][item.key].note = e.target.value.trim();
+    // 2. SUMMARY OF ATTENDED CLASSES
+    if (attendedClasses.length > 0) {
+      html += `
+        <div class="attended-summary-box">
+          <div class="focus-box-title">
+            ✓ Classes Attended (${attendedClasses.length})
+          </div>
+          <div class="attended-dates-wrap">`;
+
+      attendedClasses.forEach(item => {
+        const dObj = new Date(item.dateStr + "T12:00:00");
+        const dayName = dObj.toLocaleDateString('en-IN', { weekday: 'short' });
+        const dateNum = dObj.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+        const startTime = (item.log.timeSlot || "").split(" - ")[0] || "";
+
+        html += `<span class="attended-date-chip">${dayName}, ${dateNum} (${startTime})</span>`;
+      });
+
+      html += `
+          </div>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Attach event listeners
+    container.querySelectorAll(".focus-item-card").forEach(card => {
+      const dstr = card.getAttribute("data-date");
+      const key = card.getAttribute("data-key");
+      const item = dates.find(d => d.dateStr === dstr && d.key === key);
+      if (!item) return;
+
+      const noteInput = card.querySelector(".modal-note-input");
+      if (noteInput) {
+        noteInput.addEventListener("change", (e) => {
+          if (!state.attendanceLogs[dstr]) state.attendanceLogs[dstr] = {};
+          if (!state.attendanceLogs[dstr][key]) state.attendanceLogs[dstr][key] = { ...item.log };
+          state.attendanceLogs[dstr][key].note = e.target.value.trim();
           saveState();
           showToast("Note saved", "success");
         });
       }
 
-      row.querySelectorAll(".vote-btn").forEach(btn => {
+      card.querySelectorAll(".vote-btn").forEach(btn => {
         btn.addEventListener("click", () => {
           const newStatus = btn.getAttribute("data-status");
-          const noteVal = modalNoteInput ? modalNoteInput.value.trim() : (item.log.note || "");
-          logAttendance(item.dateStr, item.key, { subjectId, subjectName: subj.name, type: item.log.type, timeSlot: item.log.timeSlot }, newStatus, noteVal);
+          const noteVal = noteInput ? noteInput.value.trim() : (item.log.note || "");
+          logAttendance(dstr, key, { subjectId, subjectName: subj.name, type: item.log.type, timeSlot: item.log.timeSlot }, newStatus, noteVal);
           openSubjectMonthModal(subjectId, monthKey);
           renderSubjectsAnalytics();
         });
       });
-
-      container.appendChild(row);
     });
   }
 
@@ -1225,17 +1320,20 @@ function renderLogsTracker() {
     if (log.submitted) tr.className = "submitted-row";
     const dateObj = new Date(log.dateStr + "T12:00:00");
     const dateDisplay = dateObj.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+    const startTime = (log.timeSlot || "").split(" - ")[0] || "";
+    const compactTimeDisplay = startTime ? `${dateDisplay} · ${startTime}` : dateDisplay;
+
     tr.innerHTML = `
       <td style="text-align:center;">
         <div class="custom-chk ${log.submitted?"checked":""}" data-date="${log.dateStr}" data-key="${log.key}">
           <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
       </td>
-      <td><div style="font-weight:600;font-size:0.85rem;">${dateDisplay}</div><div style="font-size:0.725rem;color:var(--text-muted);">${log.timeSlot||''}</div></td>
+      <td><div style="font-weight:600;font-size:0.85rem;white-space:nowrap;">${compactTimeDisplay}</div></td>
       <td style="font-weight:600;font-size:0.85rem;" class="strike-text">${log.subjectName}</td>
       <td><span class="badge-type ${(log.type||"lecture").toLowerCase()}">${log.type}</span></td>
       <td>
-        <input type="text" class="note-inline-input" placeholder="+ Add event note..." value="${log.note||''}" data-date="${log.dateStr}" data-key="${log.key}">
+        <input type="text" class="note-inline-input" placeholder="+ Add note..." value="${log.note||''}" data-date="${log.dateStr}" data-key="${log.key}">
       </td>
       <td><span class="status-badge ${log.submitted?"submitted":"pending"}">${log.submitted?"Done":"Pending"}</span></td>`;
     
