@@ -70,6 +70,7 @@ def _export_spreadsheets(state: dict) -> None:
                 "Class_Type": log.get("type", "Lecture"),
                 "Status": log.get("status", "Unmarked"),
                 "Log_Submitted": "Yes" if log.get("submitted") else ("No" if log.get("status") == "LoggedMissed" else "-"),
+                "Note": log.get("note", ""),
                 "Extra_Class": "Yes" if log.get("isExtra") else "No"
             })
 
@@ -78,13 +79,13 @@ def _export_spreadsheets(state: dict) -> None:
         writer = csv.writer(fh)
         writer.writerow([
             "Date", "Month", "Weekday", "Time Slot", "Subject Code",
-            "Subject Name", "Class Type", "Attendance Status", "Log Submitted", "Extra Class"
+            "Subject Name", "Class Type", "Attendance Status", "Log Submitted", "Event Note / Reason", "Extra Class"
         ])
         for r in date_log_rows:
             writer.writerow([
                 r["Date"], r["Month"], r["Weekday"], r["Time_Slot"],
                 r["Subject_Code"], r["Subject_Name"], r["Class_Type"],
-                r["Status"], r["Log_Submitted"], r["Extra_Class"]
+                r["Status"], r["Log_Submitted"], r["Note"], r["Extra_Class"]
             ])
 
     # 2. Prepare Monthly Subject Breakdown Data (with Lecture, Tutorial, Practical counts)

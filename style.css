@@ -2044,10 +2044,58 @@ body {
   gap: 0.4rem;
 }
 
-.type-stat-pill .type-name {
+.month-breakdown-card.clickable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.month-breakdown-card.clickable:hover {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.35);
+  transform: translateY(-1px);
+}
+
+.month-card-link {
   font-size: 0.7rem;
   font-weight: 700;
+  color: var(--accent-glow);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.note-inline-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 220px;
+  transition: border-color var(--transition-fast);
+}
+
+.note-inline-input:focus {
+  outline: none;
+  border-color: var(--accent-glow);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.note-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.725rem;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--color-logged);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  margin-top: 0.25rem;
 }
 
 .type-stat-pill .type-ratio {

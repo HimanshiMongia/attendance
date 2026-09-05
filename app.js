@@ -66,7 +66,9 @@ const DEFAULT_STATE = {
       { hourIndex: 0, subjectId: "dnd", type: "Lecture"  },
       { hourIndex: 1, subjectId: "dnd", type: "Lecture"  },
       { hourIndex: 2, subjectId: "nam", type: "Lecture"  },
-      { hourIndex: 3, subjectId: "nam", type: "Tutorial" }
+      { hourIndex: 3, subjectId: "nam", type: "Tutorial" },
+      { hourIndex: 4, subjectId: "la",  type: "Lecture"  },
+      { hourIndex: 5, subjectId: "la",  type: "Tutorial" }
     ],
     "Thu": [
       { hourIndex: 2, subjectId: "la",   type: "Lecture"   },
@@ -114,11 +116,21 @@ function init() {
 
 function applyStateMigrations() {
   (state.subjects || []).forEach(s => { if (s.target === 75) s.target = 67; });
+
+  // Ensure Wednesday timetable includes LA Lecture 1:30-2:30 & Tutorial 2:30-3:30
+  if (!state.timetable) state.timetable = {};
+  if (!Array.isArray(state.timetable.Wed)) state.timetable.Wed = [];
+  const hasH4 = state.timetable.Wed.some(s => s.hourIndex === 4);
+  const hasH5 = state.timetable.Wed.some(s => s.hourIndex === 5);
+  if (!hasH4) state.timetable.Wed.push({ hourIndex: 4, subjectId: "la", type: "Lecture" });
+  if (!hasH5) state.timetable.Wed.push({ hourIndex: 5, subjectId: "la", type: "Tutorial" });
+  state.timetable.Wed.sort((a, b) => a.hourIndex - b.hourIndex);
+
   Object.keys(state.attendanceLogs || {}).forEach(date => {
     Object.keys(state.attendanceLogs[date]).forEach(key => {
       const log = state.attendanceLogs[date][key];
-      if (log.status === "LoggedMissed" && (log.submitted === undefined || log.submitted === false)) {
-        log.submitted = true;
+      if (log.status === "LoggedMissed" && log.submitted === undefined) {
+        log.submitted = false;
       }
     });
   });
@@ -999,12 +1011,10 @@ function renderSubjectsAnalytics() {
       }
 
       monthlyBlocksHTML += `
-        <div class="month-breakdown-card">
+        <div class="month-breakdown-card clickable" onclick="openSubjectMonthModal('${subj.id}', '${m}')">
           <div class="month-card-header">
             <span class="month-card-name">🗓️ ${monthName}</span>
-            <span class="month-card-stats" style="color:${monthStats.actualPct>=subj.target?'var(--color-attended)':'var(--color-missed)'}">
-              ${monthStats.attended}/${monthStats.conducted} (${Math.round(monthStats.actualPct)}%)
-            </span>
+            <span class="month-card-link">View Class History 🔍</span>
           </div>
           <div class="month-type-grid">
             ${typePills}
@@ -1041,13 +1051,144 @@ function renderSubjectsAnalytics() {
       </div>
 
       <div class="monthly-subject-section">
-        <span class="monthly-section-title">📅 Month-by-Month Breakdown:</span>
+        <span class="monthly-section-title">📅 Month-by-Month Breakdown (Click month to view logs):</span>
         ${monthlyBlocksHTML}
       </div>
 
       <div class="subj-advice">${overallAdvice}</div>`;
     grid.appendChild(card);
   });
+}
+
+function openSubjectMonthModal(subjectId, monthKey) {
+  const subj = state.subjects.find(s => s.id === subjectId);
+  if (!subj) return;
+
+  const dateObj = new Date(monthKey + "-01T12:00:00");
+  const monthName = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  document.getElementById("subjMonthModalTitle").textContent = `${subj.name} (${subj.code || ''})`;
+  document.getElementById("subjMonthModalSub").textContent = `Class History & Logs for ${monthName}`;
+
+  const monthStats = calculateSubjectStats(subjectId, monthKey);
+  const summaryBar = document.getElementById("subjMonthSummaryBar");
+  summaryBar.innerHTML = `
+    <span class="pct-badge safe">Attended: ${monthStats.attended}/${monthStats.conducted}</span>
+    <span class="pct-badge danger">Missed: ${monthStats.missed}</span>
+    <span class="pct-badge effective-badge">Event Logs: ${monthStats.loggedMissed} (${monthStats.submitted} done)</span>
+    <span class="pct-badge safe">Physical: ${Math.round(monthStats.actualPct)}%</span>
+    <span class="pct-badge effective-badge">Effective: ${Math.round(monthStats.effectivePct)}%</span>`;
+
+  const container = document.getElementById("subjMonthClassList");
+  container.innerHTML = "";
+
+  const dates = [];
+  const loggedKeys = new Set();
+
+  Object.keys(state.attendanceLogs || {}).forEach(dstr => {
+    if (dstr.startsWith(monthKey)) {
+      Object.keys(state.attendanceLogs[dstr]).forEach(k => {
+        if (state.attendanceLogs[dstr][k].subjectId === subjectId) {
+          dates.push({ dateStr: dstr, key: k, log: state.attendanceLogs[dstr][k] });
+          loggedKeys.add(`${dstr}_${k}`);
+        }
+      });
+    }
+  });
+
+  const [yearStr, mStr] = monthKey.split("-");
+  const year = parseInt(yearStr, 10);
+  const monthIdx = parseInt(mStr, 10) - 1;
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dObj = new Date(year, monthIdx, day);
+    const dstr = getLocalDateString(dObj);
+    const dayLong = dObj.toLocaleDateString('en-US', { weekday: 'long' });
+    const dayShort = DAY_SHORT_CODES[dayLong] || "";
+    const slots = state.timetable[dayShort] || [];
+
+    slots.forEach(slot => {
+      if (slot.subjectId === subjectId) {
+        const key = `${dayShort}_${slot.hourIndex}`;
+        if (!loggedKeys.has(`${dstr}_${key}`)) {
+          const log = state.attendanceLogs[dstr]?.[key] || null;
+          const timeDef = HOUR_SLOTS.find(h => h.index === slot.hourIndex);
+          dates.push({
+            dateStr: dstr,
+            key: key,
+            log: log || {
+              subjectId, subjectName: subj.name,
+              type: slot.type, status: "Unmarked",
+              timeSlot: timeDef ? timeDef.label : ""
+            }
+          });
+          loggedKeys.add(`${dstr}_${key}`);
+        }
+      }
+    });
+  }
+
+  dates.sort((a, b) => new Date(b.dateStr) - new Date(a.dateStr));
+
+  if (!dates.length) {
+    container.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text-secondary);">No classes held for ${subj.name} in ${monthName}.</div>`;
+  } else {
+    dates.forEach(item => {
+      const dObj = new Date(item.dateStr + "T12:00:00");
+      const dDisplay = dObj.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+      const status = item.log.status || "Unmarked";
+      const isExtra = item.log.isExtra;
+
+      const row = document.createElement("div");
+      row.className = "day-log-edit-item";
+      row.innerHTML = `
+        <div class="edit-item-name-group" style="flex:1;">
+          <span class="edit-item-subject">${dDisplay} — ${item.log.type || 'Class'} ${isExtra?'<span class="badge-extra">EXTRA</span>':''}</span>
+          <span class="edit-item-time">${item.log.timeSlot || ''}</span>
+          ${status==='LoggedMissed'?`<input type="text" class="note-inline-input modal-note-input" style="margin-top:0.35rem;" placeholder="+ Add event note (e.g. Enactus Drive)..." value="${item.log.note||''}">`:''}
+        </div>
+        <div class="vote-buttons">
+          ${buildVoteBtns(status)}
+        </div>`;
+
+      const modalNoteInput = row.querySelector(".modal-note-input");
+      if (modalNoteInput) {
+        modalNoteInput.addEventListener("change", (e) => {
+          if (!state.attendanceLogs[item.dateStr]) state.attendanceLogs[item.dateStr] = {};
+          if (!state.attendanceLogs[item.dateStr][item.key]) {
+            state.attendanceLogs[item.dateStr][item.key] = { ...item.log };
+          }
+          state.attendanceLogs[item.dateStr][item.key].note = e.target.value.trim();
+          saveState();
+          showToast("Note saved", "success");
+        });
+      }
+
+      row.querySelectorAll(".vote-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const newStatus = btn.getAttribute("data-status");
+          const noteVal = modalNoteInput ? modalNoteInput.value.trim() : (item.log.note || "");
+          logAttendance(item.dateStr, item.key, { subjectId, subjectName: subj.name, type: item.log.type, timeSlot: item.log.timeSlot }, newStatus, noteVal);
+          openSubjectMonthModal(subjectId, monthKey);
+          renderSubjectsAnalytics();
+        });
+      });
+
+      container.appendChild(row);
+    });
+  }
+
+  document.getElementById("btnDoneSubjMonthModal").onclick = () => {
+    document.getElementById("subjectMonthDetailModal").classList.remove("active");
+    renderSubjectsAnalytics();
+  };
+  document.getElementById("btnCloseSubjMonthModal").onclick = () => {
+    document.getElementById("subjectMonthDetailModal").classList.remove("active");
+    renderSubjectsAnalytics();
+  };
+
+  document.getElementById("subjectMonthDetailModal").classList.add("active");
 }
 
 function populateLogFilterDropdown() {
@@ -1082,24 +1223,39 @@ function renderLogsTracker() {
   filtered.forEach(log => {
     const tr = document.createElement("tr");
     if (log.submitted) tr.className = "submitted-row";
-    const date = new Date(log.dateStr + "T12:00:00").toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    const dateObj = new Date(log.dateStr + "T12:00:00");
+    const dateDisplay = dateObj.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
     tr.innerHTML = `
       <td style="text-align:center;">
         <div class="custom-chk ${log.submitted?"checked":""}" data-date="${log.dateStr}" data-key="${log.key}">
           <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
       </td>
-      <td><div style="font-weight:600;font-size:0.85rem;">${date}</div></td>
+      <td><div style="font-weight:600;font-size:0.85rem;">${dateDisplay}</div><div style="font-size:0.725rem;color:var(--text-muted);">${log.timeSlot||''}</div></td>
       <td style="font-weight:600;font-size:0.85rem;" class="strike-text">${log.subjectName}</td>
       <td><span class="badge-type ${(log.type||"lecture").toLowerCase()}">${log.type}</span></td>
+      <td>
+        <input type="text" class="note-inline-input" placeholder="+ Add event note..." value="${log.note||''}" data-date="${log.dateStr}" data-key="${log.key}">
+      </td>
       <td><span class="status-badge ${log.submitted?"submitted":"pending"}">${log.submitted?"Done":"Pending"}</span></td>`;
+    
     tr.querySelector(".custom-chk").addEventListener("click", () => {
       if (state.attendanceLogs[log.dateStr]?.[log.key]) {
         state.attendanceLogs[log.dateStr][log.key].submitted = !log.submitted;
         saveState(); updateCalculations(); renderLogsTracker();
-        showToast(`Log ${!log.submitted?"submitted":"unsubmitted"}`, !log.submitted?"success":"info");
+        showToast(`Log ${!log.submitted?"submitted":"marked pending"}`, !log.submitted?"success":"info");
       }
     });
+
+    const noteInput = tr.querySelector(".note-inline-input");
+    noteInput.addEventListener("change", (e) => {
+      if (state.attendanceLogs[log.dateStr]?.[log.key]) {
+        state.attendanceLogs[log.dateStr][log.key].note = e.target.value.trim();
+        saveState();
+        showToast("Saved log note", "success");
+      }
+    });
+
     tbody.appendChild(tr);
   });
 }
