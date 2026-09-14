@@ -1294,11 +1294,11 @@ body {
 
 .history-grid-container {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: 1.8fr 1fr;
   gap: 1.5rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 992px) {
   .history-grid-container {
     grid-template-columns: 1fr;
   }
@@ -1330,18 +1330,23 @@ body {
 
 .monthly-calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: 0.6fr 1fr 1fr 1fr 1fr 1fr 0.6fr;
   gap: 0.35rem;
   margin-top: 0.5rem;
 }
 
 .calendar-weekday {
   text-align: center;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.72rem;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
   padding: 0.25rem 0;
+}
+
+.calendar-weekday.weekday-weekend {
+  font-size: 0.65rem;
+  opacity: 0.65;
 }
 
 .calendar-days-container {
@@ -1349,20 +1354,36 @@ body {
 }
 
 .calendar-day-cell {
-  aspect-ratio: 1;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 0.35rem;
+  border-radius: 9px;
+  padding: 0.35rem 0.3rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
   transition: all var(--transition-fast);
-  min-height: 54px;
+  min-height: 50px;
   position: relative;
   overflow: hidden;
+}
+
+.calendar-day-cell.weekend-cell {
+  padding: 0.25rem 0.15rem;
+  min-height: 44px;
+  background: rgba(255, 255, 255, 0.01);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.calendar-day-cell.weekend-cell .day-number {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+.calendar-day-cell.weekend-cell .mini-class-dot {
+  width: 5px;
+  height: 5px;
 }
 
 .calendar-day-cell:hover {
@@ -1372,7 +1393,7 @@ body {
 }
 
 .calendar-day-cell.inactive-month {
-  opacity: 0.18;
+  opacity: 0.15;
   cursor: default;
   pointer-events: none;
 }

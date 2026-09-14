@@ -1552,8 +1552,10 @@ function renderCalendarView() {
   const prevTotal = new Date(calendarCurrentYear, calendarCurrentMonth, 0).getDate();
 
   for (let i = firstDay-1; i >= 0; i--) {
+    const prevDate = new Date(calendarCurrentYear, calendarCurrentMonth, -i);
+    const isWknd = prevDate.getDay() === 0 || prevDate.getDay() === 6;
     const c = document.createElement("div");
-    c.className = "calendar-day-cell inactive-month";
+    c.className = `calendar-day-cell inactive-month${isWknd ? " weekend-cell" : ""}`;
     c.innerHTML = `<span class="day-number">${prevTotal-i}</span>`;
     grid.appendChild(c);
   }
@@ -1561,6 +1563,7 @@ function renderCalendarView() {
     const cellDate = new Date(calendarCurrentYear, calendarCurrentMonth, d);
     const ds = getLocalDateString(cellDate);
     const isToday = ds === getLocalDateString(new Date());
+    const isWknd = cellDate.getDay() === 0 || cellDate.getDay() === 6;
     const c = document.createElement("div");
 
     const logs = state.attendanceLogs[ds];
@@ -1632,7 +1635,7 @@ function renderCalendarView() {
       }
     }
 
-    c.className = `calendar-day-cell ${statusCls}${isToday ? " today-cell" : ""}`.trim();
+    c.className = `calendar-day-cell ${statusCls}${isToday ? " today-cell" : ""}${isWknd ? " weekend-cell" : ""}`.trim();
     if (summaryText) c.setAttribute("title", `${ds}: ${summaryText}`);
 
     c.innerHTML = `
@@ -1649,8 +1652,12 @@ function renderCalendarView() {
   }
   const remaining = (7 - ((firstDay+totalDays) % 7)) % 7;
   for (let i = 1; i <= remaining; i++) {
-    const c = document.createElement("div"); c.className = "calendar-day-cell inactive-month";
-    c.innerHTML = `<span class="day-number">${i}</span>`; grid.appendChild(c);
+    const nextDate = new Date(calendarCurrentYear, calendarCurrentMonth + 1, i);
+    const isWknd = nextDate.getDay() === 0 || nextDate.getDay() === 6;
+    const c = document.createElement("div");
+    c.className = `calendar-day-cell inactive-month${isWknd ? " weekend-cell" : ""}`;
+    c.innerHTML = `<span class="day-number">${i}</span>`;
+    grid.appendChild(c);
   }
 }
 
