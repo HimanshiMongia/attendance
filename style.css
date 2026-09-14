@@ -20,21 +20,21 @@
   --accent-light: rgba(124, 58, 237, 0.1);
   
   --color-attended: hsl(142, 72%, 40%);
-  --color-attended-bg: rgba(16, 185, 129, 0.1);
-  --color-attended-border: rgba(16, 185, 129, 0.25);
+  --color-attended-bg: rgba(16, 185, 129, 0.12);
+  --color-attended-border: rgba(16, 185, 129, 0.35);
   
   --color-missed: hsl(0, 84%, 60%);
-  --color-missed-bg: rgba(239, 68, 68, 0.1);
-  --color-missed-border: rgba(239, 68, 68, 0.25);
+  --color-missed-bg: rgba(239, 68, 68, 0.12);
+  --color-missed-border: rgba(239, 68, 68, 0.35);
   
-  --color-logged: hsl(270, 85%, 65%);
-  --color-logged-bg: rgba(139, 92, 246, 0.09);
-  --color-logged-border: rgba(139, 92, 246, 0.25);
+  --color-logged: hsl(217, 91%, 60%);
+  --color-logged-bg: rgba(59, 130, 246, 0.12);
+  --color-logged-border: rgba(59, 130, 246, 0.35);
   --color-logged-submitted: hsl(142, 70%, 45%);
 
-  --color-cancelled: hsl(215, 15%, 50%);
-  --color-cancelled-bg: rgba(100, 116, 139, 0.1);
-  --color-cancelled-border: rgba(100, 116, 139, 0.25);
+  --color-cancelled: hsl(25, 10%, 55%);
+  --color-cancelled-bg: rgba(120, 113, 108, 0.15);
+  --color-cancelled-border: rgba(120, 113, 108, 0.35);
 
   --color-break: hsl(38, 92%, 50%);
   --color-break-bg: rgba(245, 158, 11, 0.08);
@@ -764,6 +764,22 @@ body {
 .strip-dot.logged { background-color: var(--color-logged); }
 .strip-dot.cancelled { background-color: var(--color-cancelled); }
 
+.strip-dot-single {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: block;
+  margin: 0 auto;
+}
+.strip-dot-empty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: block;
+  margin: 0 auto;
+  background: transparent;
+}
+
 /* ================= TIMETABLE TAB STYLING ================= */
 
 .timetable-layout {
@@ -1334,49 +1350,185 @@ body {
 
 .calendar-day-cell {
   aspect-ratio: 1;
-  background: rgba(255, 255, 255, 0.01);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 0.25rem;
+  border-radius: 10px;
+  padding: 0.35rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
   transition: all var(--transition-fast);
-  min-height: 48px;
+  min-height: 54px;
+  position: relative;
+  overflow: hidden;
 }
 
 .calendar-day-cell:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--border-hover);
-  transform: scale(1.03);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  z-index: 2;
 }
 
 .calendar-day-cell.inactive-month {
-  opacity: 0.2;
+  opacity: 0.18;
   cursor: default;
   pointer-events: none;
 }
 
+.day-cell-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
 .day-number {
-  font-size: 0.75rem;
-  font-weight: 600;
-  align-self: flex-start;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--text-secondary);
+  transition: color var(--transition-fast);
 }
 
-.day-status-indicator-dot {
-  width: 10px;
-  height: 10px;
+.day-status-dots-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.mini-class-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+.mini-class-dot.dot-attended { background-color: var(--color-attended); }
+.mini-class-dot.dot-missed { background-color: var(--color-missed); }
+.mini-class-dot.dot-logged { background-color: var(--color-logged); }
+.mini-class-dot.dot-cancelled { background-color: var(--color-cancelled); }
+.mini-class-dot.dot-unmarked { background-color: transparent; border: 1px dashed rgba(255, 255, 255, 0.4); }
+
+/* Today Cell Highlight */
+.calendar-day-cell.today-cell {
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 16px rgba(124, 58, 237, 0.3);
+}
+.calendar-day-cell.today-cell .day-number {
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 0 6px var(--accent-glow);
 }
 
-/* Day DOT classes */
+/* ================= DAY CELL COLOR MODIFIERS ================= */
+
+/* 1. All Attended (Green) */
+.calendar-day-cell.status-all-attended {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+.calendar-day-cell.status-all-attended:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.7);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+}
+.calendar-day-cell.status-all-attended .day-number {
+  color: #34d399;
+}
+
+/* 2. All Missed (Red) */
+.calendar-day-cell.status-all-missed {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+.calendar-day-cell.status-all-missed:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.7);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.25);
+}
+.calendar-day-cell.status-all-missed .day-number {
+  color: #f87171;
+}
+
+/* 3. All Logged (Blue) */
+.calendar-day-cell.status-all-logged {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+}
+.calendar-day-cell.status-all-logged:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.25);
+}
+.calendar-day-cell.status-all-logged .day-number {
+  color: #60a5fa;
+}
+
+/* 4. All Cancelled (Grey/Brown) */
+.calendar-day-cell.status-all-cancelled {
+  background: rgba(120, 113, 108, 0.18);
+  border: 1px solid rgba(168, 162, 158, 0.4);
+}
+.calendar-day-cell.status-all-cancelled:hover {
+  background: rgba(120, 113, 108, 0.28);
+  border-color: rgba(168, 162, 158, 0.6);
+  box-shadow: 0 6px 16px rgba(120, 113, 108, 0.2);
+}
+.calendar-day-cell.status-all-cancelled .day-number {
+  color: #d6d3d1;
+}
+
+/* 5. Mixed / Ombre Gradients */
+.calendar-day-cell.status-mixed {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(59, 130, 246, 0.2) 50%, rgba(239, 68, 68, 0.2) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+}
+.calendar-day-cell.status-mixed.status-mixed-att-miss {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(239, 68, 68, 0.22) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+.calendar-day-cell.status-mixed.status-mixed-att-log {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(59, 130, 246, 0.22) 100%);
+  border: 1px solid rgba(20, 184, 166, 0.5);
+}
+.calendar-day-cell.status-mixed.status-mixed-miss-log {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(59, 130, 246, 0.22) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+}
+.calendar-day-cell.status-mixed:hover {
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.3);
+}
+.calendar-day-cell.status-mixed .day-number {
+  color: #f1f5f9;
+}
+
+/* 6. Scheduled but Unmarked */
+.calendar-day-cell.status-unmarked {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+.calendar-day-cell.status-unmarked:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Day DOT classes for strip and indicator */
+.day-status-indicator-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+  display: inline-block;
+}
 .day-status-indicator-dot.status-all-attended { background-color: var(--color-attended); }
-.day-status-indicator-dot.status-mixed { background: linear-gradient(135deg, var(--color-attended), var(--color-missed)); }
+.day-status-indicator-dot.status-mixed { background: linear-gradient(135deg, var(--color-attended), var(--color-logged), var(--color-missed)); }
 .day-status-indicator-dot.status-all-missed { background-color: var(--color-missed); }
+.day-status-indicator-dot.status-all-logged { background-color: var(--color-logged); }
 .day-status-indicator-dot.status-all-cancelled { background-color: var(--color-cancelled); }
 .day-status-indicator-dot.status-no-classes { background-color: transparent; border: 1px dashed var(--text-muted); }
 
@@ -1386,30 +1538,32 @@ body {
   gap: 1rem;
   flex-wrap: wrap;
   margin-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 1rem;
+  align-items: center;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
+  gap: 0.45rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
 }
 
 .legend-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   display: inline-block;
 }
 
-.legend-dot.status-all-attended { background-color: var(--color-attended); }
-.legend-dot.status-mixed { background: linear-gradient(135deg, var(--color-attended), var(--color-missed)); }
-.legend-dot.status-all-missed { background-color: var(--color-missed); }
-.legend-dot.status-all-cancelled { background-color: var(--color-cancelled); }
-.legend-dot.status-no-classes { border: 1px dashed var(--text-muted); }
+.legend-dot.status-all-attended { background-color: var(--color-attended); box-shadow: 0 0 6px rgba(16, 185, 129, 0.4); }
+.legend-dot.status-mixed { background: linear-gradient(135deg, var(--color-attended) 0%, var(--color-logged) 50%, var(--color-missed) 100%); box-shadow: 0 0 6px rgba(168, 85, 247, 0.4); }
+.legend-dot.status-all-missed { background-color: var(--color-missed); box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+.legend-dot.status-all-logged { background-color: var(--color-logged); box-shadow: 0 0 6px rgba(59, 130, 246, 0.4); }
+.legend-dot.status-all-cancelled { background-color: var(--color-cancelled); box-shadow: 0 0 6px rgba(120, 113, 108, 0.4); }
+.legend-dot.status-no-classes { border: 1px dashed rgba(255, 255, 255, 0.4); background: transparent; }
 
 /* Data card */
 .data-management-card {

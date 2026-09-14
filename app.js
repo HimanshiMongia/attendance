@@ -374,17 +374,16 @@ function buildVoteBtns(status) {
 
 // ================= LOGGING LOGIC =================
 
-function logAttendance(dateStr, key, slot, status) {
+function logAttendance(dateStr, key, slot, status, noteOverride) {
   if (!state.attendanceLogs[dateStr]) state.attendanceLogs[dateStr] = {};
   const existing = state.attendanceLogs[dateStr][key];
-  if (existing && existing.status === status) {
+  if (existing && existing.status === status && noteOverride === undefined) {
     delete state.attendanceLogs[dateStr][key];
     if (!Object.keys(state.attendanceLogs[dateStr]).length) delete state.attendanceLogs[dateStr];
     showToast(`Cleared ${slot.subjectName}`, "info");
   } else {
-    const existing = state.attendanceLogs[dateStr][key];
     const prevSubmitted = existing ? (existing.submitted || false) : false;
-    const prevNote = existing ? (existing.note || "") : "";
+    const prevNote = noteOverride !== undefined ? noteOverride : (existing ? (existing.note || "") : "");
     state.attendanceLogs[dateStr][key] = {
       subjectId: slot.subjectId, subjectName: slot.subjectName,
       type: slot.type, status, timeSlot: slot.timeSlot,
@@ -489,6 +488,7 @@ function calculateSubjectStats(subjectId, monthFilter = "all") {
 
   const conducted = attended + missed + loggedMissed;
   const actualPct    = conducted > 0 ? (attended / conducted) * 100 : 100;
+  // Effective = attended + all loggedMissed (they count as "covered" whether or not submitted yet)
   const effectivePct = conducted > 0 ? ((attended + loggedMissed) / conducted) * 100 : 100;
 
   ["Lecture","Tutorial","Practical"].forEach(t => {
@@ -795,18 +795,32 @@ function renderCalendarStrip() {
     el.className = `strip-day${isSelected ? " active-day" : ""}`;
 
     const logs = state.attendanceLogs[ds] || {};
-    const statuses = Object.values(logs).map(l => l.status);
+    const statuses = Object.values(logs).map(l => l.status).filter(Boolean);
     let dotClass = "";
     if (statuses.length) {
       const hasA = statuses.includes("Attended");
-      const hasM = statuses.some(s => s === "Missed" || s === "LoggedMissed");
-      dotClass = hasA && hasM ? "status-mixed" : hasA ? "status-all-attended" : hasM ? "status-all-missed" : "status-all-cancelled";
+      const hasM = statuses.includes("Missed");
+      const hasL = statuses.includes("LoggedMissed");
+      const hasC = statuses.includes("Cancelled");
+      const distinctCount = [hasA, hasM, hasL, hasC].filter(Boolean).length;
+
+      if (distinctCount > 1) {
+        dotClass = "status-mixed";
+      } else if (hasA) {
+        dotClass = "status-all-attended";
+      } else if (hasL) {
+        dotClass = "status-all-logged";
+      } else if (hasM) {
+        dotClass = "status-all-missed";
+      } else if (hasC) {
+        dotClass = "status-all-cancelled";
+      }
     }
 
     el.innerHTML = `
       <span class="strip-day-name">${dayName}</span>
       <span class="strip-day-num">${d.getDate()}</span>
-      ${dotClass ? `<span class="strip-dot-single ${dotClass}"></span>` : `<span class="strip-dot-empty"></span>`}`;
+      ${dotClass ? `<span class="strip-dot-single day-status-indicator-dot ${dotClass}"></span>` : `<span class="strip-dot-empty"></span>`}`;
     el.addEventListener("click", () => { selectedDate = new Date(d); renderDashboard(); });
     strip.appendChild(el);
   }
@@ -907,13 +921,14 @@ function calculateSubjectStats(subjectId, monthFilter = "all") {
 
   const conducted = attended + missed + loggedMissed;
   const actualPct    = conducted > 0 ? (attended / conducted) * 100 : 100;
-  const effectivePct = conducted > 0 ? ((attended + submitted) / conducted) * 100 : 100;
+  // Effective = attended + all loggedMissed (covered by society/event log)
+  const effectivePct = conducted > 0 ? ((attended + loggedMissed) / conducted) * 100 : 100;
 
   ["Lecture","Tutorial","Practical"].forEach(t => {
     const d = byType[t];
     d.conducted = d.attended + d.missed + d.loggedMissed;
     d.actualPct    = d.conducted > 0 ? (d.attended / d.conducted) * 100 : 100;
-    d.effectivePct = d.conducted > 0 ? ((d.attended + d.submitted) / d.conducted) * 100 : 100;
+    d.effectivePct = d.conducted > 0 ? ((d.attended + d.loggedMissed) / d.conducted) * 100 : 100;
   });
 
   return { attended, missed, loggedMissed, submitted, conducted, actualPct, effectivePct, cancelled, byType };
@@ -1545,25 +1560,90 @@ function renderCalendarView() {
   for (let d = 1; d <= totalDays; d++) {
     const cellDate = new Date(calendarCurrentYear, calendarCurrentMonth, d);
     const ds = getLocalDateString(cellDate);
+    const isToday = ds === getLocalDateString(new Date());
     const c = document.createElement("div");
-    c.className = "calendar-day-cell";
-    if (ds === getLocalDateString(new Date())) c.classList.add("today-cell");
-    c.innerHTML = `<span class="day-number">${d}</span>`;
+
     const logs = state.attendanceLogs[ds];
+    const wdName = cellDate.toLocaleDateString('en-US', { weekday: 'long' });
+    const ds2 = DAY_SHORT_CODES[wdName];
+    const ttSlots = state.timetable[ds2] || [];
+
+    let statusCls = "";
+    let dotsHtml = "";
+    let summaryText = "";
+
     if (logs && Object.keys(logs).length) {
-      const arr = Object.values(logs).filter(l => l.status);
-      const hasA = arr.some(l => l.status === "Attended");
-      const hasM = arr.some(l => l.status === "Missed" || l.status === "LoggedMissed");
-      const hasC = arr.some(l => l.status === "Cancelled");
-      const dotCls = hasA && hasM ? "status-mixed" : hasA ? "status-all-attended" : hasM ? "status-all-missed" : hasC ? "status-all-cancelled" : "";
-      if (dotCls) { const dot = document.createElement("span"); dot.className = `day-dot ${dotCls}`; c.appendChild(dot); }
+      const arr = Object.values(logs).filter(l => l && l.status);
+      if (arr.length > 0) {
+        const countA = arr.filter(l => l.status === "Attended").length;
+        const countM = arr.filter(l => l.status === "Missed").length;
+        const countL = arr.filter(l => l.status === "LoggedMissed").length;
+        const countC = arr.filter(l => l.status === "Cancelled").length;
+
+        const hasA = countA > 0;
+        const hasM = countM > 0;
+        const hasL = countL > 0;
+        const hasC = countC > 0;
+
+        const distinctCount = [hasA, hasM, hasL, hasC].filter(Boolean).length;
+
+        if (distinctCount > 1) {
+          if (hasA && hasM && !hasL && !hasC) {
+            statusCls = "status-mixed status-mixed-att-miss";
+          } else if (hasA && hasL && !hasM && !hasC) {
+            statusCls = "status-mixed status-mixed-att-log";
+          } else if (hasM && hasL && !hasA && !hasC) {
+            statusCls = "status-mixed status-mixed-miss-log";
+          } else {
+            statusCls = "status-mixed";
+          }
+          summaryText = `${countA ? countA + " Attended " : ""}${countL ? countL + " Logged " : ""}${countM ? countM + " Missed " : ""}${countC ? countC + " Cancelled" : ""}`.trim();
+        } else if (hasA) {
+          statusCls = "status-all-attended";
+          summaryText = `${countA} Attended`;
+        } else if (hasL) {
+          statusCls = "status-all-logged";
+          summaryText = `${countL} Logged`;
+        } else if (hasM) {
+          statusCls = "status-all-missed";
+          summaryText = `${countM} Missed`;
+        } else if (hasC) {
+          statusCls = "status-all-cancelled";
+          summaryText = `${countC} Cancelled`;
+        }
+
+        // Render mini dots for each logged class
+        dotsHtml = arr.map(l => {
+          let dotType = "dot-unmarked";
+          if (l.status === "Attended") dotType = "dot-attended";
+          else if (l.status === "Missed") dotType = "dot-missed";
+          else if (l.status === "LoggedMissed") dotType = "dot-logged";
+          else if (l.status === "Cancelled") dotType = "dot-cancelled";
+          return `<span class="mini-class-dot ${dotType}" title="${l.subjectName || ''}: ${l.status}"></span>`;
+        }).join("");
+      } else if (ttSlots.length > 0) {
+        statusCls = "status-unmarked";
+        dotsHtml = ttSlots.map(() => `<span class="mini-class-dot dot-unmarked" title="Unmarked"></span>`).join("");
+      }
     } else {
-      const wdName = cellDate.toLocaleDateString('en-US', { weekday: 'long' });
-      const ds2 = DAY_SHORT_CODES[wdName];
-      if ((state.timetable[ds2]||[]).length > 0) {
-        const dot = document.createElement("span"); dot.className = "day-dot status-no-classes"; c.appendChild(dot);
+      if (ttSlots.length > 0) {
+        statusCls = "status-unmarked";
+        dotsHtml = ttSlots.map(() => `<span class="mini-class-dot dot-unmarked" title="Unmarked"></span>`).join("");
       }
     }
+
+    c.className = `calendar-day-cell ${statusCls}${isToday ? " today-cell" : ""}`.trim();
+    if (summaryText) c.setAttribute("title", `${ds}: ${summaryText}`);
+
+    c.innerHTML = `
+      <div class="day-cell-top">
+        <span class="day-number">${d}</span>
+      </div>
+      <div class="day-status-dots-row">
+        ${dotsHtml}
+      </div>
+    `;
+
     c.addEventListener("click", () => openDayLogsModal(cellDate));
     grid.appendChild(c);
   }
